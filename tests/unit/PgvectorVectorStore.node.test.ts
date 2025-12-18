@@ -52,6 +52,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
 
     mockVectorStore = {
       upsert: jest.fn(),
+      upsertBatch: jest.fn(),
       query: jest.fn(),
       delete: jest.fn(),
       get: jest.fn(),
@@ -113,7 +114,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
     it('should call vectorstore.upsert for single mode', async () => {
       const params = {
         ...mockParameters.upsertSingle,
-        embedding: sampleEmbedding1536,
+        embedding: JSON.stringify(sampleEmbedding1536),
       };
 
       mockVectorStore.upsert.mockResolvedValue({
@@ -131,8 +132,8 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
           collection: params.collection,
           externalId: params.externalId,
           content: params.content,
-          metadata: params.metadata,
-          embedding: params.embedding,
+          metadata: JSON.parse(params.metadata),
+          embedding: sampleEmbedding1536,
         }),
       );
     });
@@ -159,11 +160,10 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
         ...mockParameters.upsertBatch,
       };
 
-      mockVectorStore.upsert.mockResolvedValue({
-        id: 'test-id',
-        collection: params.collection,
-        operation: 'insert',
-      });
+      mockVectorStore.upsertBatch.mockResolvedValue([
+        { id: 'test-id-1', collection: params.collection, operation: 'insert' },
+        { id: 'test-id-2', collection: params.collection, operation: 'insert' },
+      ]);
 
       const mockContext = createMockExecuteFunctions(
         params,
@@ -172,7 +172,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
 
       await node.execute!.call(mockContext as any);
 
-      expect(mockVectorStore.upsert).toHaveBeenCalledTimes(2);
+      expect(mockVectorStore.upsertBatch).toHaveBeenCalledTimes(1);
     });
 
     it('should throw error if embedding is missing', async () => {
@@ -202,7 +202,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
     it('should call vectorstore.query with correct parameters', async () => {
       const params = {
         ...mockParameters.query,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
       };
 
       mockVectorStore.query.mockResolvedValue({
@@ -221,7 +221,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
       expect(mockVectorStore.query).toHaveBeenCalledWith(
         expect.objectContaining({
           collection: params.collection,
-          embedding: params.queryEmbedding,
+          embedding: sampleEmbedding1536,
           topK: params.topK,
           offset: params.offset,
           distanceMetric: params.distanceMetric,
@@ -232,7 +232,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
     it('should include metadata filter when provided', async () => {
       const params = {
         ...mockParameters.queryWithFilter,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
       };
 
       mockVectorStore.query.mockResolvedValue({ rows: [] });
@@ -242,7 +242,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
 
       expect(mockVectorStore.query).toHaveBeenCalledWith(
         expect.objectContaining({
-          metadataFilter: params.metadataFilter,
+          metadataFilter: JSON.parse(params.metadataFilter),
         }),
       );
     });
@@ -259,11 +259,12 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
     });
 
     it('should default topK to 10 if not provided', async () => {
-      const params = {
+      const paramsBase = {
         ...mockParameters.query,
-        queryEmbedding: sampleEmbedding1536,
-        topK: undefined,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
       };
+      // Remove topK to test default
+      const { topK, ...params } = paramsBase as any;
 
       mockVectorStore.query.mockResolvedValue({ rows: [] });
 
@@ -285,7 +286,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
 
         const params = {
           ...mockParameters.query,
-          queryEmbedding: sampleEmbedding1536,
+          queryEmbedding: JSON.stringify(sampleEmbedding1536),
           distanceMetric: metric,
         };
 
@@ -368,7 +369,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
       expect(mockVectorStore.delete).toHaveBeenCalledWith(
         expect.objectContaining({
           collection: params.collection,
-          metadataFilter: params.deleteMetadataFilter,
+          metadataFilter: JSON.parse(params.deleteMetadataFilter),
         }),
       );
     });
@@ -484,22 +485,17 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
       );
     });
 
-    it('should call vectorstore.delete for dropCollection operation', async () => {
+    it('should call pgVector.dropCollection for dropCollection operation', async () => {
       const params = {
         ...mockParameters.adminDropCollection,
       };
 
-      mockVectorStore.delete.mockResolvedValue({ deletedCount: 10 });
+      mockPgVectorManager.dropCollection.mockResolvedValue({ deletedCount: 10 });
 
       const mockContext = createMockExecuteFunctions(params);
       await node.execute!.call(mockContext as any);
 
-      expect(mockVectorStore.delete).toHaveBeenCalledWith(
-        expect.objectContaining({
-          collection: params.adminCollection,
-          metadataFilter: {},
-        }),
-      );
+      expect(mockPgVectorManager.dropCollection).toHaveBeenCalledWith(params.adminCollection);
     });
 
     it('should validate index type', async () => {
@@ -538,7 +534,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
     it('should propagate database errors', async () => {
       const params = {
         ...mockParameters.query,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
       };
 
       mockVectorStore.query.mockRejectedValue(new Error('Database connection failed'));
@@ -561,7 +557,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
     it('should cleanup database connection on error', async () => {
       const params = {
         ...mockParameters.query,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
       };
 
       mockVectorStore.query.mockRejectedValue(new Error('Query failed'));
@@ -582,7 +578,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
     it('should return data in n8n format with json property', async () => {
       const params = {
         ...mockParameters.query,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
       };
 
       mockVectorStore.query.mockResolvedValue({
@@ -602,7 +598,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
     it('should handle empty results', async () => {
       const params = {
         ...mockParameters.query,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
       };
 
       mockVectorStore.query.mockResolvedValue({ rows: [] });
@@ -639,7 +635,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
     it('should validate collection name is provided for operations that need it', async () => {
       const params = {
         operation: 'query',
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
         collection: undefined,
       };
 
@@ -671,8 +667,8 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
 
       const params = {
         ...mockParameters.upsertSingle,
-        metadata,
-        embedding: sampleEmbedding1536,
+        metadata: JSON.stringify(metadata),
+        embedding: JSON.stringify(sampleEmbedding1536),
       };
 
       mockVectorStore.upsert.mockResolvedValue({

@@ -18,7 +18,10 @@ export function createMockExecuteFunctions(
     getCredentials: jest.fn().mockResolvedValue(credentials),
 
     // Mock getNodeParameter
-    getNodeParameter: jest.fn((paramName: string) => parameters[paramName]),
+    getNodeParameter: jest.fn((paramName: string, _itemIndex: number, defaultValue?: any) => {
+      const value = parameters[paramName];
+      return value !== undefined ? value : defaultValue;
+    }),
 
     // Mock getInputData
     getInputData: jest.fn().mockReturnValue(inputData),
@@ -57,7 +60,7 @@ export function createMockExecuteFunctions(
     getMode: jest.fn().mockReturnValue('manual'),
   };
 
-  return mockContext as Partial<IExecuteFunctions>;
+  return mockContext as unknown as Partial<IExecuteFunctions>;
 }
 
 /**
@@ -120,19 +123,21 @@ export const mockParameters = {
   // Upsert - Single mode
   upsertSingle: {
     operation: 'upsert',
-    mode: 'single',
+    upsertMode: 'single',
     collection: 'test_collection',
+    dimensions: 1536,
     externalId: 'test-doc-1',
     content: 'Test document content',
-    metadata: { category: 'test' },
-    embedding: Array(1536).fill(0.1),
+    metadata: JSON.stringify({ category: 'test' }),
+    embedding: JSON.stringify(Array(1536).fill(0.1)),
   },
 
   // Upsert - Batch mode
   upsertBatch: {
     operation: 'upsert',
-    mode: 'batch',
+    upsertMode: 'batch',
     collection: 'test_collection',
+    dimensions: 1536,
     fieldMapping: {
       idField: 'id',
       externalIdField: 'docId',
@@ -146,10 +151,11 @@ export const mockParameters = {
   query: {
     operation: 'query',
     collection: 'test_collection',
-    queryEmbedding: Array(1536).fill(0.1),
+    queryEmbedding: JSON.stringify(Array(1536).fill(0.1)),
     topK: 10,
     offset: 0,
     distanceMetric: 'cosine',
+    metadataFilter: JSON.stringify({}),
     includeEmbedding: false,
   },
 
@@ -157,10 +163,11 @@ export const mockParameters = {
   queryWithFilter: {
     operation: 'query',
     collection: 'test_collection',
-    queryEmbedding: Array(1536).fill(0.1),
+    queryEmbedding: JSON.stringify(Array(1536).fill(0.1)),
     topK: 5,
     distanceMetric: 'cosine',
-    metadataFilter: { category: 'technology' },
+    metadataFilter: JSON.stringify({ category: 'technology' }),
+    includeEmbedding: false,
   },
 
   // Delete by ID
@@ -183,7 +190,7 @@ export const mockParameters = {
     operation: 'delete',
     collection: 'test_collection',
     deleteBy: 'metadata',
-    deleteMetadataFilter: { status: 'archived' },
+    deleteMetadataFilter: JSON.stringify({ status: 'archived' }),
   },
 
   // Get by ID
@@ -200,6 +207,7 @@ export const mockParameters = {
     collection: 'test_collection',
     getBy: 'externalId',
     getExternalIds: 'doc-1, doc-2',
+    includeEmbedding: false,
   },
 
   // Admin - Ensure schema

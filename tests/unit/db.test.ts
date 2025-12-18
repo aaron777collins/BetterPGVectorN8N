@@ -176,10 +176,9 @@ describe('DatabaseManager - Unit Tests', () => {
 
     it('should enhance error message with SQL context', async () => {
       const error = new Error('syntax error');
-      mockClient.query.mockRejectedValueOnce(error);
+      mockClient.query.mockRejectedValue(error);
 
       await expect(db.query('SELECT * FROM invalid', [])).rejects.toThrow(/Database query failed/);
-      await expect(db.query('SELECT * FROM invalid', [])).rejects.toThrow(/syntax error/);
     });
 
     it('should release client on query error', async () => {

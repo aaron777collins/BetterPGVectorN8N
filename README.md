@@ -488,6 +488,45 @@ Increase `max` in credentials configuration or reduce concurrent operations.
 4. Create indexes for your collections
 5. Update workflows to use new node
 
+## Publishing
+
+This package is automatically published to npm when a version tag is pushed to GitHub.
+
+### Publishing Process
+
+1. **Update version in package.json**
+   ```bash
+   npm version patch  # or minor, or major
+   ```
+
+2. **Push changes and tags**
+   ```bash
+   git push origin main
+   git push origin --tags
+   ```
+
+3. **Automated workflow**
+   - GitHub Actions will automatically run tests
+   - Build the package
+   - Verify the version tag matches package.json
+   - Publish to npm with provenance
+   - Create a GitHub release
+
+### Prerequisites
+
+- The `NPM_TOKEN` secret must be configured in GitHub repository settings
+- The version must not already exist on npm
+- All tests must pass
+- The version tag must match the package.json version
+
+### Manual Publishing (if needed)
+
+```bash
+npm run build
+npm pack --dry-run  # Verify contents
+npm publish --access public
+```
+
 ## Contributing
 
 Contributions are welcome! Please:
