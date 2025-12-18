@@ -22,4 +22,22 @@ module.exports = {
   },
   testTimeout: 30000,
   setupFilesAfterEnv: ['<rootDir>/tests/setup.ts'],
+  // Projects configuration for separating unit and integration tests
+  projects: [
+    {
+      displayName: 'unit',
+      testMatch: ['<rootDir>/tests/unit/**/*.test.ts'],
+      testEnvironment: 'node',
+    },
+    {
+      displayName: 'integration',
+      testMatch: ['<rootDir>/tests/integration/**/*.test.ts'],
+      testEnvironment: 'node',
+    },
+    {
+      displayName: 'e2e',
+      testMatch: ['<rootDir>/tests/e2e/**/*.test.ts'],
+      testEnvironment: 'node',
+    },
+  ],
 };
