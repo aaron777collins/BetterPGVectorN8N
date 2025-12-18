@@ -3,29 +3,26 @@
  *
  * These tests simulate real n8n workflow execution with a live database.
  * They test the complete integration of the node with PostgreSQL and pgvector.
+ *
+ * Following TDD principles:
+ * 1. Write test first (red)
+ * 2. Implement minimal code (green)
+ * 3. Refactor (clean)
  */
 
 import { PgvectorVectorStore } from '../../nodes/PgvectorVectorStore.node';
 import { DatabaseManager } from '../../lib/db';
 import {
   createMockExecuteFunctions,
-  createMockInputData,
   extractJsonFromNodeData,
-  validateNodeOutput,
   mockParameters,
 } from '../helpers/mockN8n';
 import {
-  generateEmbedding,
   sampleEmbedding1536,
   sampleEmbedding1536_2,
   sampleEmbedding1536_3,
-  sampleMetadata1,
-  sampleMetadata2,
-  sampleMetadata3,
-  sampleBatchData,
   testCollections,
   testDbConfig,
-  generateBatchDocuments,
 } from '../helpers/testData';
 
 describe('PgvectorVectorStore E2E Tests', () => {
@@ -33,6 +30,9 @@ describe('PgvectorVectorStore E2E Tests', () => {
   let dbManager: DatabaseManager;
 
   beforeAll(async () => {
+    // Initialize node instance
+    node = new PgvectorVectorStore();
+
     // Create database connection
     dbManager = new DatabaseManager(testDbConfig);
 
@@ -40,27 +40,424 @@ describe('PgvectorVectorStore E2E Tests', () => {
     await dbManager.query('CREATE EXTENSION IF NOT EXISTS vector', []);
 
     // Create embeddings table if it doesn't exist
-      await dbManager.query(`
-        CREATE INDEX IF NOT EXISTS idx_test_docs_hnsw
-        ON embeddings USING hnsw (embedding vector_cosine_ops)
-        WHERE collection = '${testCollections.documents}'
-      `, []);
+    await dbManager.query(
+      `CREATE TABLE IF NOT EXISTS embeddings (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        collection TEXT NOT NULL,
+        external_id TEXT,
+        content TEXT,
+        metadata JSONB NOT NULL DEFAULT '{}',
+        embedding VECTOR(1536) NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE(collection, external_id)
+      )`,
+      [],
+    );
 
+    // Create metadata index
+    await dbManager.query(
+      `CREATE INDEX IF NOT EXISTS idx_embeddings_metadata ON embeddings USING GIN (metadata)`,
+      [],
+    );
+  });
+
+  afterAll(async () => {
+    // Clean up database connection
+    await dbManager.close();
+  });
+
+  beforeEach(async () => {
+    // Clean up all test data before each test
+    await dbManager.query(
+      `DELETE FROM embeddings WHERE collection LIKE 'test_%' OR collection = 'default'`,
+      [],
+    );
+  });
+
+  describe('Admin Operations', () => {
+    it('should ensure schema on first run', async () => {
+      const params = {
+        ...mockParameters.adminEnsureSchema,
+        dimensions: 1536,
+      };
+
+      const mockContext = createMockExecuteFunctions(params);
+      const result = await node.execute!.call(mockContext as any);
+
+      const data = extractJsonFromNodeData(result[0]);
+      expect(data[0]).toMatchObject({
+        success: true,
+        operation: 'ensureSchema',
+      });
+
+      // Verify table exists
+      const tableCheck = await dbManager.query(
+        `SELECT EXISTS (
+          SELECT FROM information_schema.tables
+          WHERE table_name = 'embeddings'
+        )`,
+        [],
+      );
+      expect(tableCheck.rows[0].exists).toBe(true);
+    });
+
+    it('should be idempotent (run multiple times safely)', async () => {
+      const params = {
+        ...mockParameters.adminEnsureSchema,
+        dimensions: 1536,
+      };
+
+      const mockContext = createMockExecuteFunctions(params);
+
+      // Run twice
+      await node.execute!.call(mockContext as any);
+      const result = await node.execute!.call(mockContext as any);
+
+      const data = extractJsonFromNodeData(result[0]);
+      expect(data[0].success).toBe(true);
+    });
+
+    it('should create HNSW index', async () => {
+      // First ensure some data exists in the collection
+      await dbManager.query(
+        `INSERT INTO embeddings (collection, content, metadata, embedding)
+         VALUES ($1, $2, $3, $4)`,
+        [testCollections.default, 'Test', {}, JSON.stringify(sampleEmbedding1536)],
+      );
+
+      const params = {
+        ...mockParameters.adminCreateIndex,
+        adminCollection: testCollections.default,
+        indexType: 'hnsw',
+        adminDistanceMetric: 'cosine',
+      };
+
+      const mockContext = createMockExecuteFunctions(params);
+      const result = await node.execute!.call(mockContext as any);
+
+      const data = extractJsonFromNodeData(result[0]);
+      expect(data[0]).toMatchObject({
+        success: true,
+        operation: 'createIndex',
+        indexType: 'hnsw',
+      });
+    });
+
+    it('should create IVFFlat index', async () => {
+      // First ensure some data exists
+      await dbManager.query(
+        `INSERT INTO embeddings (collection, content, metadata, embedding)
+         VALUES ($1, $2, $3, $4)`,
+        [testCollections.default, 'Test', {}, JSON.stringify(sampleEmbedding1536)],
+      );
+
+      const params = {
+        ...mockParameters.adminCreateIndex,
+        adminCollection: testCollections.default,
+        indexType: 'ivfflat',
+        adminDistanceMetric: 'l2',
+      };
+
+      const mockContext = createMockExecuteFunctions(params);
+      const result = await node.execute!.call(mockContext as any);
+
+      const data = extractJsonFromNodeData(result[0]);
+      expect(data[0]).toMatchObject({
+        success: true,
+        operation: 'createIndex',
+        indexType: 'ivfflat',
+      });
+    });
+
+    it('should drop collection', async () => {
+      // Insert some data first
+      await dbManager.query(
+        `INSERT INTO embeddings (collection, content, metadata, embedding)
+         VALUES ($1, $2, $3, $4)`,
+        [testCollections.temp, 'Test', {}, JSON.stringify(sampleEmbedding1536)],
+      );
+
+      const params = {
+        ...mockParameters.adminDropCollection,
+        adminCollection: testCollections.temp,
+      };
+
+      const mockContext = createMockExecuteFunctions(params);
+      const result = await node.execute!.call(mockContext as any);
+
+      const data = extractJsonFromNodeData(result[0]);
+      expect(data[0].success).toBe(true);
+
+      // Verify collection is empty
+      const countResult = await dbManager.query(
+        `SELECT COUNT(*) as count FROM embeddings WHERE collection = $1`,
+        [testCollections.temp],
+      );
+      expect(parseInt(countResult.rows[0].count)).toBe(0);
+    });
+  });
+
+  describe('Upsert Operation', () => {
+    it('should upsert single embedding with all fields', async () => {
+      const params = {
+        ...mockParameters.upsertSingle,
+        collection: testCollections.default,
+        externalId: 'doc-1',
+        content: 'Test document',
+        metadata: { category: 'test' },
+        embedding: sampleEmbedding1536,
+      };
+
+      const mockContext = createMockExecuteFunctions(params);
+      const result = await node.execute!.call(mockContext as any);
+
+      const data = extractJsonFromNodeData(result[0]);
+      expect(data[0]).toHaveProperty('id');
+      expect(data[0].externalId).toBe('doc-1');
+    });
+
+    it('should upsert single embedding with minimal fields', async () => {
+      const params = {
+        ...mockParameters.upsertSingle,
+        collection: testCollections.default,
+        embedding: sampleEmbedding1536,
+      };
+
+      const mockContext = createMockExecuteFunctions(params);
+      const result = await node.execute!.call(mockContext as any);
+
+      const data = extractJsonFromNodeData(result[0]);
+      expect(data[0]).toHaveProperty('id');
+    });
+
+    it('should update existing embedding when external_id matches', async () => {
+      const externalId = 'doc-update-test';
+
+      // Insert initial version
+      const params1 = {
+        ...mockParameters.upsertSingle,
+        collection: testCollections.default,
+        externalId,
+        content: 'Version 1',
+        metadata: { version: 1 },
+        embedding: sampleEmbedding1536,
+      };
+
+      const context1 = createMockExecuteFunctions(params1);
+      await node.execute!.call(context1 as any);
+
+      // Update with same external_id
+      const params2 = {
+        ...mockParameters.upsertSingle,
+        collection: testCollections.default,
+        externalId,
+        content: 'Version 2',
+        metadata: { version: 2 },
+        embedding: sampleEmbedding1536_2,
+      };
+
+      const context2 = createMockExecuteFunctions(params2);
+      await node.execute!.call(context2 as any);
+
+      // Verify only one record exists
+      const countResult = await dbManager.query(
+        `SELECT COUNT(*) as count FROM embeddings
+         WHERE collection = $1 AND external_id = $2`,
+        [testCollections.default, externalId],
+      );
+      expect(parseInt(countResult.rows[0].count)).toBe(1);
+
+      // Verify it's the latest version
+      const selectResult = await dbManager.query(
+        `SELECT metadata FROM embeddings
+         WHERE collection = $1 AND external_id = $2`,
+        [testCollections.default, externalId],
+      );
+      expect(selectResult.rows[0].metadata.version).toBe(2);
+    });
+
+    it('should handle batch upserts with field mapping', async () => {
+      const params = {
+        ...mockParameters.upsertBatch,
+        collection: testCollections.default,
+      };
+
+      const mockContext = createMockExecuteFunctions(params);
+      const result = await node.execute!.call(mockContext as any);
+
+      const data = extractJsonFromNodeData(result[0]);
+      expect(data.length).toBeGreaterThan(0);
+      expect(data[0]).toHaveProperty('id');
+    });
+
+    it('should throw error for missing embedding', async () => {
+      const params = {
+        ...mockParameters.upsertSingle,
+        collection: testCollections.default,
+        // Missing embedding
+      };
+
+      const mockContext = createMockExecuteFunctions(params);
+
+      await expect(node.execute!.call(mockContext as any)).rejects.toThrow();
+    });
+  });
+
+  describe('Query Operation', () => {
+    beforeEach(async () => {
+      // Insert test documents
+      const docs = [
+        {
+          collection: testCollections.documents,
+          external_id: 'query-doc-1',
+          content: 'AI and machine learning',
+          metadata: { category: 'tech', difficulty: 'beginner' },
+          embedding: sampleEmbedding1536,
+        },
+        {
+          collection: testCollections.documents,
+          external_id: 'query-doc-2',
+          content: 'Advanced AI concepts',
+          metadata: { category: 'tech', difficulty: 'advanced' },
+          embedding: sampleEmbedding1536_2,
+        },
+        {
+          collection: testCollections.documents,
+          external_id: 'query-doc-3',
+          content: 'Science basics',
+          metadata: { category: 'science', difficulty: 'beginner' },
+          embedding: sampleEmbedding1536_3,
+        },
+      ];
+
+      for (const doc of docs) {
+        await dbManager.query(
+          `INSERT INTO embeddings (collection, external_id, content, metadata, embedding)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [doc.collection, doc.external_id, doc.content, doc.metadata, JSON.stringify(doc.embedding)],
+        );
+      }
+    });
+
+    it('should perform basic similarity search', async () => {
+      const params = {
+        ...mockParameters.query,
+        collection: testCollections.documents,
+        queryEmbedding: sampleEmbedding1536,
+        topK: 5,
+      };
+
+      const mockContext = createMockExecuteFunctions(params);
+      const result = await node.execute!.call(mockContext as any);
+
+      const data = extractJsonFromNodeData(result[0]);
+      expect(data.length).toBeGreaterThan(0);
+      expect(data[0]).toHaveProperty('score');
+      expect(data[0]).toHaveProperty('externalId');
+    });
+
+    it('should apply metadata filters', async () => {
       const params = {
         ...mockParameters.query,
         collection: testCollections.documents,
         queryEmbedding: sampleEmbedding1536,
         topK: 10,
+        metadataFilter: { category: 'tech' },
       };
 
       const mockContext = createMockExecuteFunctions(params);
+      const result = await node.execute!.call(mockContext as any);
 
-      const startTime = Date.now();
-      await node.execute!.call(mockContext as any);
-      const duration = Date.now() - startTime;
+      const data = extractJsonFromNodeData(result[0]);
+      expect(data.length).toBeGreaterThan(0);
+      data.forEach((item: any) => {
+        expect(item.metadata.category).toBe('tech');
+      });
+    });
 
-      // Should be fast with index (< 100ms)
-      expect(duration).toBeLessThan(100);
+    it('should support pagination with offset', async () => {
+      const params = {
+        ...mockParameters.query,
+        collection: testCollections.documents,
+        queryEmbedding: sampleEmbedding1536,
+        topK: 2,
+        offset: 1,
+      };
+
+      const mockContext = createMockExecuteFunctions(params);
+      const result = await node.execute!.call(mockContext as any);
+
+      const data = extractJsonFromNodeData(result[0]);
+      expect(data.length).toBeLessThanOrEqual(2);
+    });
+
+    it('should support different distance metrics', async () => {
+      const metrics = ['cosine', 'l2', 'inner_product'];
+
+      for (const metric of metrics) {
+        const params = {
+          ...mockParameters.query,
+          collection: testCollections.documents,
+          queryEmbedding: sampleEmbedding1536,
+          topK: 5,
+          distanceMetric: metric,
+        };
+
+        const mockContext = createMockExecuteFunctions(params);
+        const result = await node.execute!.call(mockContext as any);
+
+        const data = extractJsonFromNodeData(result[0]);
+        expect(data.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('should include embedding when requested', async () => {
+      const params = {
+        ...mockParameters.query,
+        collection: testCollections.documents,
+        queryEmbedding: sampleEmbedding1536,
+        topK: 1,
+        includeEmbedding: true,
+      };
+
+      const mockContext = createMockExecuteFunctions(params);
+      const result = await node.execute!.call(mockContext as any);
+
+      const data = extractJsonFromNodeData(result[0]);
+      expect(data[0]).toHaveProperty('embedding');
+      expect(Array.isArray(data[0].embedding)).toBe(true);
+    });
+
+    it('should not include embedding by default', async () => {
+      const params = {
+        ...mockParameters.query,
+        collection: testCollections.documents,
+        queryEmbedding: sampleEmbedding1536,
+        topK: 1,
+        includeEmbedding: false,
+      };
+
+      const mockContext = createMockExecuteFunctions(params);
+      const result = await node.execute!.call(mockContext as any);
+
+      const data = extractJsonFromNodeData(result[0]);
+      expect(data[0]).not.toHaveProperty('embedding');
+    });
+
+    it('should return empty array for query on empty collection', async () => {
+      const params = {
+        ...mockParameters.query,
+        collection: 'empty_collection',
+        queryEmbedding: sampleEmbedding1536,
+        topK: 10,
+      };
+
+      const mockContext = createMockExecuteFunctions(params);
+      const result = await node.execute!.call(mockContext as any);
+
+      const data = extractJsonFromNodeData(result[0]);
+      expect(data).toEqual([]);
     });
   });
 
@@ -191,9 +588,7 @@ describe('PgvectorVectorStore E2E Tests', () => {
       await node.execute!.call(mockContext as any);
 
       // Verify other collection is untouched
-      const countResult = await dbManager.query(
-        `SELECT COUNT(*) as count FROM embeddings WHERE collection = 'other_collection'`,
-      );
+      const countResult = await dbManager.query(`SELECT COUNT(*) as count FROM embeddings WHERE collection = 'other_collection'`);
       expect(parseInt(countResult.rows[0].count)).toBe(1);
     });
 
@@ -330,127 +725,6 @@ describe('PgvectorVectorStore E2E Tests', () => {
     });
   });
 
-  describe('Admin Operations', () => {
-    it('should ensure schema on first run', async () => {
-      const params = {
-        ...mockParameters.adminEnsureSchema,
-        dimensions: 384,
-      };
-
-      const mockContext = createMockExecuteFunctions(params);
-      const result = await node.execute!.call(mockContext as any);
-
-      const data = extractJsonFromNodeData(result[0]);
-      expect(data[0]).toMatchObject({
-        success: true,
-        operation: 'ensureSchema',
-      });
-
-      // Verify table exists
-      const tableCheck = await dbManager.query(`
-        SELECT EXISTS (
-          SELECT FROM information_schema.tables
-          WHERE table_name = 'embeddings'
-        )
-      `, []);
-      expect(tableCheck.rows[0].exists).toBe(true);
-    });
-
-    it('should be idempotent (run multiple times safely)', async () => {
-      const params = {
-        ...mockParameters.adminEnsureSchema,
-      };
-
-      const mockContext = createMockExecuteFunctions(params);
-
-      // Run twice
-      await node.execute!.call(mockContext as any);
-      const result = await node.execute!.call(mockContext as any);
-
-      const data = extractJsonFromNodeData(result[0]);
-      expect(data[0].success).toBe(true);
-    });
-
-    it('should create HNSW index', async () => {
-      // First ensure some data exists in the collection
-      await dbManager.query(
-        `INSERT INTO embeddings (collection, content, metadata, embedding)
-         VALUES ($1, $2, $3, $4)`,
-        [testCollections.default, 'Test', {}, JSON.stringify(sampleEmbedding1536)],
-      );
-
-      const params = {
-        ...mockParameters.adminCreateIndex,
-        adminCollection: testCollections.default,
-        indexType: 'hnsw',
-        adminDistanceMetric: 'cosine',
-      };
-
-      const mockContext = createMockExecuteFunctions(params);
-      const result = await node.execute!.call(mockContext as any);
-
-      const data = extractJsonFromNodeData(result[0]);
-      expect(data[0]).toMatchObject({
-        success: true,
-        operation: 'createIndex',
-        indexType: 'hnsw',
-      });
-    });
-
-    it('should create IVFFlat index', async () => {
-      // First ensure some data exists
-      await dbManager.query(
-        `INSERT INTO embeddings (collection, content, metadata, embedding)
-         VALUES ($1, $2, $3, $4)`,
-        [testCollections.default, 'Test', {}, JSON.stringify(sampleEmbedding1536)],
-      );
-
-      const params = {
-        ...mockParameters.adminCreateIndex,
-        adminCollection: testCollections.default,
-        indexType: 'ivfflat',
-        adminDistanceMetric: 'l2',
-      };
-
-      const mockContext = createMockExecuteFunctions(params);
-      const result = await node.execute!.call(mockContext as any);
-
-      const data = extractJsonFromNodeData(result[0]);
-      expect(data[0]).toMatchObject({
-        success: true,
-        operation: 'createIndex',
-        indexType: 'ivfflat',
-      });
-    });
-
-    it('should drop collection', async () => {
-      // Insert some data first
-      await dbManager.query(
-        `INSERT INTO embeddings (collection, content, metadata, embedding)
-         VALUES ($1, $2, $3, $4)`,
-        [testCollections.temp, 'Test', {}, JSON.stringify(sampleEmbedding1536)],
-      );
-
-      const params = {
-        ...mockParameters.adminDropCollection,
-        adminCollection: testCollections.temp,
-      };
-
-      const mockContext = createMockExecuteFunctions(params);
-      const result = await node.execute!.call(mockContext as any);
-
-      const data = extractJsonFromNodeData(result[0]);
-      expect(data[0].success).toBe(true);
-
-      // Verify collection is empty
-      const countResult = await dbManager.query(
-        `SELECT COUNT(*) as count FROM embeddings WHERE collection = $1`,
-        [testCollections.temp],
-      );
-      expect(parseInt(countResult.rows[0].count)).toBe(0);
-    });
-  });
-
   describe('Workflow Scenarios', () => {
     it('should support complete semantic search pipeline', async () => {
       // Step 1: Upsert documents
@@ -560,6 +834,66 @@ describe('PgvectorVectorStore E2E Tests', () => {
       const threshold = 0.95;
       expect(similarity).toBeGreaterThan(threshold);
       // In real workflow, would not insert duplicate
+    });
+
+    it('should support batch processing workflow', async () => {
+      // Batch insert
+      const batchParams = {
+        ...mockParameters.upsertBatch,
+        collection: testCollections.default,
+      };
+
+      const batchContext = createMockExecuteFunctions(batchParams);
+      await node.execute!.call(batchContext as any);
+
+      // Batch query
+      const queryParams = {
+        ...mockParameters.query,
+        collection: testCollections.default,
+        queryEmbedding: sampleEmbedding1536,
+        topK: 10,
+      };
+
+      const queryContext = createMockExecuteFunctions(queryParams);
+      const queryResult = await node.execute!.call(queryContext as any);
+
+      const data = extractJsonFromNodeData(queryResult[0]);
+      expect(data.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Performance Tests', () => {
+    it('should perform query with HNSW index quickly', async () => {
+      // First ensure some data exists
+      await dbManager.query(
+        `INSERT INTO embeddings (collection, content, metadata, embedding)
+         VALUES ($1, $2, $3, $4)`,
+        [testCollections.documents, 'Test', {}, JSON.stringify(sampleEmbedding1536)],
+      );
+
+      // Create HNSW index
+      await dbManager.query(
+        `CREATE INDEX IF NOT EXISTS idx_test_docs_hnsw
+        ON embeddings USING hnsw (embedding vector_cosine_ops)
+        WHERE collection = '${testCollections.documents}'`,
+        [],
+      );
+
+      const params = {
+        ...mockParameters.query,
+        collection: testCollections.documents,
+        queryEmbedding: sampleEmbedding1536,
+        topK: 10,
+      };
+
+      const mockContext = createMockExecuteFunctions(params);
+
+      const startTime = Date.now();
+      await node.execute!.call(mockContext as any);
+      const duration = Date.now() - startTime;
+
+      // Should be fast with index (< 100ms)
+      expect(duration).toBeLessThan(100);
     });
   });
 });

@@ -113,7 +113,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
     it('should call vectorstore.upsert for single mode', async () => {
       const params = {
         ...mockParameters.upsertSingle,
-        embedding: sampleEmbedding1536,
+        embedding: JSON.stringify(sampleEmbedding1536),
       };
 
       mockVectorStore.upsert.mockResolvedValue({
@@ -202,7 +202,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
     it('should call vectorstore.query with correct parameters', async () => {
       const params = {
         ...mockParameters.query,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
       };
 
       mockVectorStore.query.mockResolvedValue({
@@ -232,7 +232,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
     it('should include metadata filter when provided', async () => {
       const params = {
         ...mockParameters.queryWithFilter,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
       };
 
       mockVectorStore.query.mockResolvedValue({ rows: [] });
@@ -261,7 +261,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
     it('should default topK to 10 if not provided', async () => {
       const params = {
         ...mockParameters.query,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
         topK: undefined,
       };
 
@@ -285,7 +285,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
 
         const params = {
           ...mockParameters.query,
-          queryEmbedding: sampleEmbedding1536,
+          queryEmbedding: JSON.stringify(sampleEmbedding1536),
           distanceMetric: metric,
         };
 
@@ -538,7 +538,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
     it('should propagate database errors', async () => {
       const params = {
         ...mockParameters.query,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
       };
 
       mockVectorStore.query.mockRejectedValue(new Error('Database connection failed'));
@@ -561,7 +561,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
     it('should cleanup database connection on error', async () => {
       const params = {
         ...mockParameters.query,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
       };
 
       mockVectorStore.query.mockRejectedValue(new Error('Query failed'));
@@ -582,7 +582,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
     it('should return data in n8n format with json property', async () => {
       const params = {
         ...mockParameters.query,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
       };
 
       mockVectorStore.query.mockResolvedValue({
@@ -602,7 +602,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
     it('should handle empty results', async () => {
       const params = {
         ...mockParameters.query,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
       };
 
       mockVectorStore.query.mockResolvedValue({ rows: [] });
@@ -639,7 +639,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
     it('should validate collection name is provided for operations that need it', async () => {
       const params = {
         operation: 'query',
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
         collection: undefined,
       };
 
@@ -671,8 +671,8 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
 
       const params = {
         ...mockParameters.upsertSingle,
-        metadata,
-        embedding: sampleEmbedding1536,
+        metadata: JSON.stringify(metadata),
+        embedding: JSON.stringify(sampleEmbedding1536),
       };
 
       mockVectorStore.upsert.mockResolvedValue({
