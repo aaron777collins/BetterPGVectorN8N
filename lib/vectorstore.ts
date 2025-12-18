@@ -66,6 +66,7 @@ export interface GetParams {
   id?: string | string[];
   collection?: string;
   externalId?: string | string[];
+  includeEmbedding?: boolean;
 }
 
 export interface GetResult {

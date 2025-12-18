@@ -18,7 +18,10 @@ export function createMockExecuteFunctions(
     getCredentials: jest.fn().mockResolvedValue(credentials),
 
     // Mock getNodeParameter
-    getNodeParameter: jest.fn((paramName: string) => parameters[paramName]),
+    getNodeParameter: jest.fn((paramName: string, _itemIndex: number, defaultValue?: any) => {
+      const value = parameters[paramName];
+      return value !== undefined ? value : defaultValue;
+    }),
 
     // Mock getInputData
     getInputData: jest.fn().mockReturnValue(inputData),

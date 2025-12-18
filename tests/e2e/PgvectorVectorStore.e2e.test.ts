@@ -588,7 +588,7 @@ describe('PgvectorVectorStore E2E Tests', () => {
       await node.execute!.call(mockContext as any);
 
       // Verify other collection is untouched
-      const countResult = await dbManager.query(`SELECT COUNT(*) as count FROM embeddings WHERE collection = 'other_collection'`);
+      const countResult = await dbManager.query(`SELECT COUNT(*) as count FROM embeddings WHERE collection = 'other_collection'`, []);
       expect(parseInt(countResult.rows[0].count)).toBe(1);
     });
 

@@ -617,6 +617,10 @@ export class PgvectorVectorStore implements INodeType {
           const metadata = JSON.parse(metadataStr);
           const embedding = JSON.parse(embeddingStr);
 
+          if (!embeddingStr || !embedding || !Array.isArray(embedding) || embedding.length === 0) {
+            throw new Error('Embedding is required and must be a non-empty array');
+          }
+
           const params: UpsertParams = {
             collection,
             embedding,
@@ -709,8 +713,11 @@ export class PgvectorVectorStore implements INodeType {
       } else if (operation === 'get') {
         const collection = this.getNodeParameter('collection', 0) as string;
         const getBy = this.getNodeParameter('getBy', 0) as string;
+        const includeEmbedding = this.getNodeParameter('includeEmbedding', 0, false) as boolean;
 
-        const params: GetParams = {};
+        const params: GetParams = {
+          includeEmbedding,
+        };
 
         if (getBy === 'id') {
           const idsStr = this.getNodeParameter('getIds', 0) as string;
@@ -742,10 +749,20 @@ export class PgvectorVectorStore implements INodeType {
           });
         } else if (adminOperation === 'createIndex') {
           const collection = this.getNodeParameter('adminCollection', 0) as string;
-          const indexType = this.getNodeParameter('indexType', 0) as IndexType;
-          const distanceMetric = this.getNodeParameter('adminDistanceMetric', 0) as DistanceMetric;
+          const indexType = this.getNodeParameter('indexType', 0) as string;
+          const distanceMetric = this.getNodeParameter('adminDistanceMetric', 0) as string;
 
-          await pgVector.ensureIndex(collection, indexType, distanceMetric);
+          // Validate indexType
+          if (!Object.values(IndexType).includes(indexType as IndexType)) {
+            throw new Error(`Invalid index type: ${indexType}. Must be one of: ${Object.values(IndexType).join(', ')}`);
+          }
+
+          // Validate distanceMetric
+          if (!Object.values(DistanceMetric).includes(distanceMetric as DistanceMetric)) {
+            throw new Error(`Invalid distance metric: ${distanceMetric}. Must be one of: ${Object.values(DistanceMetric).join(', ')}`);
+          }
+
+          await pgVector.ensureIndex(collection, indexType as IndexType, distanceMetric as DistanceMetric);
 
           returnData.push({
             json: {
@@ -768,6 +785,8 @@ export class PgvectorVectorStore implements INodeType {
             },
           });
         }
+      } else {
+        throw new Error(`Invalid operation: ${operation}`);
       }
 
       return [returnData];

@@ -52,6 +52,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
 
     mockVectorStore = {
       upsert: jest.fn(),
+      upsertBatch: jest.fn(),
       query: jest.fn(),
       delete: jest.fn(),
       get: jest.fn(),
@@ -131,8 +132,8 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
           collection: params.collection,
           externalId: params.externalId,
           content: params.content,
-          metadata: params.metadata,
-          embedding: params.embedding,
+          metadata: JSON.parse(params.metadata),
+          embedding: sampleEmbedding1536,
         }),
       );
     });
@@ -159,11 +160,10 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
         ...mockParameters.upsertBatch,
       };
 
-      mockVectorStore.upsert.mockResolvedValue({
-        id: 'test-id',
-        collection: params.collection,
-        operation: 'insert',
-      });
+      mockVectorStore.upsertBatch.mockResolvedValue([
+        { id: 'test-id-1', collection: params.collection, operation: 'insert' },
+        { id: 'test-id-2', collection: params.collection, operation: 'insert' },
+      ]);
 
       const mockContext = createMockExecuteFunctions(
         params,
@@ -172,7 +172,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
 
       await node.execute!.call(mockContext as any);
 
-      expect(mockVectorStore.upsert).toHaveBeenCalledTimes(2);
+      expect(mockVectorStore.upsertBatch).toHaveBeenCalledTimes(1);
     });
 
     it('should throw error if embedding is missing', async () => {
@@ -221,7 +221,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
       expect(mockVectorStore.query).toHaveBeenCalledWith(
         expect.objectContaining({
           collection: params.collection,
-          embedding: params.queryEmbedding,
+          embedding: sampleEmbedding1536,
           topK: params.topK,
           offset: params.offset,
           distanceMetric: params.distanceMetric,
@@ -242,7 +242,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
 
       expect(mockVectorStore.query).toHaveBeenCalledWith(
         expect.objectContaining({
-          metadataFilter: params.metadataFilter,
+          metadataFilter: JSON.parse(params.metadataFilter),
         }),
       );
     });
@@ -259,11 +259,12 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
     });
 
     it('should default topK to 10 if not provided', async () => {
-      const params = {
+      const paramsBase = {
         ...mockParameters.query,
         queryEmbedding: JSON.stringify(sampleEmbedding1536),
-        topK: undefined,
       };
+      // Remove topK to test default
+      const { topK, ...params } = paramsBase as any;
 
       mockVectorStore.query.mockResolvedValue({ rows: [] });
 
@@ -368,7 +369,7 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
       expect(mockVectorStore.delete).toHaveBeenCalledWith(
         expect.objectContaining({
           collection: params.collection,
-          metadataFilter: params.deleteMetadataFilter,
+          metadataFilter: JSON.parse(params.deleteMetadataFilter),
         }),
       );
     });
@@ -484,22 +485,17 @@ describe('PgvectorVectorStore Node - Unit Tests', () => {
       );
     });
 
-    it('should call vectorstore.delete for dropCollection operation', async () => {
+    it('should call pgVector.dropCollection for dropCollection operation', async () => {
       const params = {
         ...mockParameters.adminDropCollection,
       };
 
-      mockVectorStore.delete.mockResolvedValue({ deletedCount: 10 });
+      mockPgVectorManager.dropCollection.mockResolvedValue({ deletedCount: 10 });
 
       const mockContext = createMockExecuteFunctions(params);
       await node.execute!.call(mockContext as any);
 
-      expect(mockVectorStore.delete).toHaveBeenCalledWith(
-        expect.objectContaining({
-          collection: params.adminCollection,
-          metadataFilter: {},
-        }),
-      );
+      expect(mockPgVectorManager.dropCollection).toHaveBeenCalledWith(params.adminCollection);
     });
 
     it('should validate index type', async () => {
