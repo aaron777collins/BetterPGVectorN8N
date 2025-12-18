@@ -38,8 +38,7 @@
       "dist/credentials/Postgres.credentials.js"
     ],
     "nodes": [
-      "dist/nodes/PgvectorVectorStore.node.js",
-      "dist/nodes/PostgresExec.node.js"
+      "dist/nodes/PgvectorVectorStore.node.js"
     ]
   },
   "keywords": [

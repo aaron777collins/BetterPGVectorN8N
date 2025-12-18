@@ -169,7 +169,7 @@ describe('sqlBuilder', () => {
         { name: 'Alice', id: '1', age: 30 }
       ];
       const columns = ['id', 'name', 'age'];
-      const { placeholders, values } = buildBatchValues(rows, columns);
+      const { values } = buildBatchValues(rows, columns);
 
       expect(values).toEqual(['1', 'Alice', 30]);
     });
@@ -185,7 +185,7 @@ describe('sqlBuilder', () => {
         { metadata: { key: 'value', nested: { prop: 123 } } }
       ];
       const columns = ['metadata'];
-      const { placeholders, values } = buildBatchValues(rows, columns);
+      const { values } = buildBatchValues(rows, columns);
 
       expect(values[0]).toEqual({ key: 'value', nested: { prop: 123 } });
     });
