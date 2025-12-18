@@ -17,5 +17,5 @@ module.exports = {
     '@typescript-eslint/explicit-module-boundary-types': 'off',
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
   },
-  ignorePatterns: ['dist', 'node_modules', '*.js'],
+  ignorePatterns: ['dist', 'node_modules', '*.js', 'tests/**/*'],
 };

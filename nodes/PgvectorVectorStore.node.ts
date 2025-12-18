@@ -686,7 +686,7 @@ export class PgvectorVectorStore implements INodeType {
         const collection = this.getNodeParameter('collection', 0) as string;
         const deleteBy = this.getNodeParameter('deleteBy', 0) as string;
 
-        let params: DeleteParams = {};
+        const params: DeleteParams = {};
 
         if (deleteBy === 'id') {
           const idsStr = this.getNodeParameter('deleteIds', 0) as string;
@@ -710,7 +710,7 @@ export class PgvectorVectorStore implements INodeType {
         const collection = this.getNodeParameter('collection', 0) as string;
         const getBy = this.getNodeParameter('getBy', 0) as string;
 
-        let params: GetParams = {};
+        const params: GetParams = {};
 
         if (getBy === 'id') {
           const idsStr = this.getNodeParameter('getIds', 0) as string;
