@@ -1,0 +1,58 @@
+# Source files
+src/
+*.ts
+!*.d.ts
+
+# Tests
+__tests__/
+*.test.ts
+*.spec.ts
+jest.config.js
+coverage/
+
+# Development
+.vscode/
+.idea/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build tools
+tsconfig.json
+tsconfig.build.json
+gulpfile.js
+.eslintrc.js
+.eslintrc.json
+.eslintignore
+.prettierrc
+.prettierignore
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Docker
+docker-compose.yml
+Dockerfile
+.dockerignore
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation (keep README and LICENSE)
+docs/
+
+# Environment
+.env
+.env.*
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
