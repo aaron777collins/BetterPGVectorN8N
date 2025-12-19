@@ -40,6 +40,9 @@
       "dist/nodes/PgvectorVectorStore.node.js"
     ]
   },
+  "bin": {
+    "pgvector-mcp": "./dist/mcp/cli.js"
+  },
   "keywords": [
     "n8n-community-node-package",
     "n8n",
@@ -47,7 +50,10 @@
     "postgres",
     "vector",
     "embeddings",
-    "semantic-search"
+    "semantic-search",
+    "mcp",
+    "model-context-protocol",
+    "ai-agents"
   ],
   "devDependencies": {
     "@types/jest": "^29.5.14",
