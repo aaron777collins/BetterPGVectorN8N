@@ -37,7 +37,8 @@
       "dist/credentials/Postgres.credentials.js"
     ],
     "nodes": [
-      "dist/nodes/PgvectorVectorStore.node.js"
+      "dist/nodes/PgvectorVectorStore.node.js",
+      "dist/nodes/PgVectorStoreTool.node.js"
     ]
   },
   "bin": {
@@ -75,8 +76,10 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "@langchain/core": "^0.3.0",
     "pg": "^8.11.3",
-    "pgvector": "^0.1.8"
+    "pgvector": "^0.1.8",
+    "zod": "^3.23.0"
   },
   "peerDependencies": {
     "n8n-workflow": "*"

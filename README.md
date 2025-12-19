@@ -74,6 +74,7 @@ The Docker init script automatically checks for updates on each container start.
 | Basic queries | Filters, pagination, multiple distance metrics |
 | Single inserts | Batch operations (1000+ embeddings) |
 | Manual schema | Auto table/index creation |
+| No AI Agent tools | **AI Agent Tool for RAG workflows** |
 
 ---
 
@@ -283,8 +284,9 @@ Set environment variables: `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWO
 | [Installation](https://aaron777collins.github.io/BetterPGVectorN8N/installation) | All installation methods |
 | [Quick Start](https://aaron777collins.github.io/BetterPGVectorN8N/quick-start) | Get running in 5 minutes |
 | [Operations](https://aaron777collins.github.io/BetterPGVectorN8N/operations) | Full operations reference |
+| [AI Agent Tools](https://aaron777collins.github.io/BetterPGVectorN8N/ai-tools) | Use with n8n AI Agents |
+| [MCP Server](https://aaron777collins.github.io/BetterPGVectorN8N/mcp) | Use with external AI (Claude) |
 | [Docker Guide](https://aaron777collins.github.io/BetterPGVectorN8N/docker) | Persistent Docker setup |
-| [API Reference](https://aaron777collins.github.io/BetterPGVectorN8N/api-reference) | Schema & TypeScript API |
 | [Troubleshooting](https://aaron777collins.github.io/BetterPGVectorN8N/troubleshooting) | Common issues & fixes |
 
 ---
