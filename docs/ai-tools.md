@@ -6,20 +6,20 @@ nav_order: 6
 
 # AI Agent Tools for n8n
 
-This package includes an **AI Agent Tool** node that allows n8n's AI Agents to interact with your vector store directly.
+This package includes an **AI Agent Tool** node that allows n8n's AI Agents to interact with your vector store using intuitive, human-like operations.
 
 ---
 
 ## What is the PGVector Store Tool?
 
-The **PGVector Store Tool** is a special n8n node that provides AI Agents with the ability to:
+The **PGVector Store Tool** provides AI Agents with a natural way to manage knowledge:
 
-- **Search** for similar documents using natural language
-- **Store** new documents with automatic embedding generation
-- **Delete** documents by their external ID
-- **Retrieve** specific documents by ID
+- **Remember** - Store new information (with optional ID for updates)
+- **Recall** - Search for similar information using natural language
+- **Forget** - Delete by exact ID or by concept similarity
+- **Lookup** - Get a specific entry by ID
 
-This enables powerful RAG (Retrieval-Augmented Generation) workflows where AI agents can dynamically access and update your knowledge base.
+This enables powerful RAG (Retrieval-Augmented Generation) workflows where AI agents can dynamically manage your knowledge base.
 
 ---
 
@@ -40,8 +40,8 @@ This enables powerful RAG (Retrieval-Augmented Generation) workflows where AI ag
 ### 3. Configure the Tool
 
 1. Set up your **Postgres credentials**
-2. Choose the **Operation** (Query, Upsert, Delete, or Get)
-3. Specify your **Collection** name
+2. Choose the **Operation** (Recall, Remember, Forget, or Lookup)
+3. Specify your **Collection** name (default: "knowledge")
 4. Optionally customize the **Tool Description**
 
 ### 4. Run Your Agent
@@ -50,116 +50,126 @@ The AI Agent will now be able to use your vector store based on the conversation
 
 ---
 
-## Node Configuration
+## Operations
 
-### Connection Requirements
+### Remember (Store Information)
 
-The PGVector Store Tool requires:
-
-| Input | Description |
-|-------|-------------|
-| **Embeddings** | An embeddings model (OpenAI, Cohere, etc.) to generate vectors |
-| **Postgres Credentials** | Database connection for your pgvector instance |
-
-### Operations
-
-#### Query (Similarity Search)
-
-Search for documents similar to the AI's query.
+Store new information or update existing entries.
 
 | Parameter | Description |
 |-----------|-------------|
-| Collection | The collection to search |
-| Top K | Number of results to return (default: 10) |
+| content | The information/text to remember |
+| id | Optional ID for this memory (use to update existing entries) |
+| metadata | Optional tags like `{category: "meeting", date: "2024-01"}` |
+
+**Example AI interactions:**
+> "Remember that our next team meeting is on Friday at 2pm"
+
+> "Save this with ID 'meeting-schedule': Team meetings are every Friday"
+
+> "Update the entry with ID 'api-docs' with the new endpoint information"
+
+The tool generates an embedding and stores the content. If an ID is provided and already exists, it updates the entry.
+
+### Recall (Search)
+
+Search for information using natural language.
+
+| Parameter | Description |
+|-----------|-------------|
+| query | What to search for (natural language) |
+| filter | Optional metadata filter like `{category: "meeting"}` |
+| Top K | Number of results to return (default: 5) |
 | Distance Metric | cosine, l2, or inner_product |
-| Include Content | Whether to show document content |
 
-**Example AI interaction:**
-> "Find documents about machine learning in my knowledge base"
+**Example AI interactions:**
+> "What do we know about upcoming meetings?"
 
-The agent will automatically use the tool to search and return relevant results.
+> "Find all information tagged with category 'technical'"
 
-#### Upsert (Store Document)
+> "Recall anything related to API authentication"
 
-Store new documents or update existing ones.
+Results include relevance scores and any stored metadata.
 
-| Parameter | Description |
-|-----------|-------------|
-| Collection | The collection to store in |
+### Forget (Delete)
 
-**Example AI interaction:**
-> "Save this article about TypeScript best practices to my documents collection"
-
-The agent will embed and store the content automatically.
-
-#### Delete
-
-Remove documents from the collection.
+Remove information by exact ID or by concept similarity.
 
 | Parameter | Description |
 |-----------|-------------|
-| Collection | The collection to delete from |
+| id | Exact ID of the entry to delete |
+| concept | Delete entries similar to this concept/text |
+| threshold | Similarity threshold for concept deletion (0-1, default 0.8) |
+| dryRun | If true, shows what would be deleted without actually deleting |
 
-**Example AI interaction:**
-> "Delete the document with ID 'old-article-123' from my collection"
+**Example AI interactions:**
 
-#### Get
+By ID:
+> "Forget the entry with ID 'old-meeting-notes'"
 
-Retrieve a specific document by its external ID.
+By concept:
+> "Forget everything related to the deprecated API"
+
+With dry run:
+> "Show me what would be deleted if I forget all information about Q1 planning"
+
+The concept-based deletion is powerful for cleaning up related information. Use `dryRun` to preview what would be deleted.
+
+### Lookup (Get by ID)
+
+Retrieve a specific entry by its exact ID.
 
 | Parameter | Description |
 |-----------|-------------|
-| Collection | The collection to get from |
+| id | The ID of the entry to retrieve |
 
-**Example AI interaction:**
-> "Show me the document with external ID 'meeting-notes-2024'"
+**Example AI interactions:**
+> "Show me the entry with ID 'meeting-notes-2024'"
+
+> "Look up the document with ID 'api-v2-spec'"
 
 ---
 
-## Tool Descriptions
+## Tool Naming
 
-You can customize how the AI understands when to use each tool by setting a custom **Tool Description**.
+Tools are automatically named based on the collection:
+- `remember_knowledge`
+- `recall_knowledge`
+- `forget_knowledge`
+- `lookup_knowledge`
 
-**Default descriptions:**
-
-| Operation | Default Description |
-|-----------|---------------------|
-| Query | "Search the {collection} collection for documents similar to the query. Returns the {topK} most relevant results with similarity scores." |
-| Upsert | "Store a document in the {collection} collection. The document will be embedded and stored for later similarity search." |
-| Delete | "Delete documents from the {collection} collection by their external ID." |
-| Get | "Retrieve a specific document from the {collection} collection by its external ID." |
-
-**Custom example:**
-```
-Search our product documentation for answers to customer questions.
-Use this when the user asks about product features, pricing, or support.
-```
+For a collection named "docs":
+- `remember_docs`
+- `recall_docs`
+- `forget_docs`
+- `lookup_docs`
 
 ---
 
 ## Example Workflows
 
-### RAG Chatbot
+### RAG Chatbot with Memory
 
 ```
 Chat Trigger → AI Agent → OpenAI Chat Model
                     ↓
-              PGVector Store Tool (Query) → OpenAI Embeddings
+              PGVector Store Tool (Recall) → OpenAI Embeddings
 ```
 
 The agent searches your knowledge base to answer questions.
 
-### Document Ingestion
+### Learning Assistant
 
 ```
-Webhook → AI Agent → OpenAI Chat Model
-               ↓
-         PGVector Store Tool (Upsert) → OpenAI Embeddings
+Chat Trigger → AI Agent → OpenAI Chat Model
+                    ↓
+              PGVector Store Tool (Remember) → OpenAI Embeddings
+              PGVector Store Tool (Recall) → OpenAI Embeddings
 ```
 
-The agent processes and stores incoming documents.
+The agent can both learn new information and recall it later.
 
-### Knowledge Base Management
+### Knowledge Base Manager
 
 ```
 Chat Trigger → AI Agent → OpenAI Chat Model
@@ -167,23 +177,23 @@ Chat Trigger → AI Agent → OpenAI Chat Model
               PGVector Store Tool (All Operations) → OpenAI Embeddings
 ```
 
-The agent can search, add, update, and delete documents based on conversation.
+The agent can remember, recall, forget, and lookup based on conversation.
 
 ---
 
-## Multiple Tools
+## Multiple Tools / Collections
 
-You can add **multiple PGVector Store Tool nodes** to give your agent access to different operations or collections:
+You can add **multiple PGVector Store Tool nodes** to give your agent access to different collections:
 
 ```
 AI Agent
-    ├── PGVector Store Tool (Query - documents)
-    ├── PGVector Store Tool (Query - products)
-    ├── PGVector Store Tool (Upsert - documents)
-    └── PGVector Store Tool (Delete - documents)
+    ├── PGVector Store Tool (Recall - meetings)
+    ├── PGVector Store Tool (Recall - documents)
+    ├── PGVector Store Tool (Remember - notes)
+    └── PGVector Store Tool (Forget - notes)
 ```
 
-Each tool will have a distinct name like `search_documents`, `search_products`, etc.
+Each tool will have a distinct name like `recall_meetings`, `recall_documents`, etc.
 
 ---
 
@@ -194,38 +204,44 @@ Each tool will have a distinct name like `search_documents`, `search_products`, 
 Write specific descriptions so the AI knows exactly when to use each tool:
 
 ```
-❌ Bad: "Search documents"
-✅ Good: "Search the customer support knowledge base for answers to technical questions about our software products"
+Bad: "Search documents"
+Good: "Search the customer support knowledge base for answers to technical questions about our software products"
 ```
 
-### 2. Separate Collections
+### 2. Use IDs for Important Entries
 
-Use different collections for different types of content:
-- `support_articles` - Customer support documentation
-- `product_info` - Product specifications
-- `meeting_notes` - Internal meeting summaries
-
-### 3. Use External IDs
-
-Always provide external IDs when upserting documents to enable updates and deletions:
+Provide IDs when storing information you'll want to update or delete later:
 
 ```json
 {
-  "externalId": "article-123",
-  "content": "Document content..."
+  "id": "team-schedule-2024",
+  "content": "Team meetings are on Fridays at 2pm"
 }
 ```
 
-### 4. Metadata for Filtering
+### 3. Leverage Concept-Based Forget
+
+When cleaning up related information, use the concept-based forget with a dry run first:
+
+```
+"Show me what would be deleted if I forget all Q1 meeting notes"
+```
+
+Then without dry run:
+```
+"Forget all Q1 meeting notes"
+```
+
+### 4. Metadata for Organization
 
 Add metadata to enable filtered searches:
 
 ```json
 {
   "metadata": {
-    "category": "support",
-    "product": "enterprise",
-    "date": "2024-01"
+    "category": "meeting",
+    "quarter": "Q1",
+    "year": "2024"
   }
 }
 ```
@@ -250,10 +266,16 @@ Make sure you've connected an **Embeddings** node (like OpenAI Embeddings) to th
 - Ensure pgvector extension is installed
 - Check database is accessible from n8n
 
+### Concept-based forget not working as expected
+
+- Try adjusting the threshold (higher = stricter matching)
+- Use dry run to preview what will be deleted
+- Check that the concept text is similar enough to stored content
+
 ---
 
 ## See Also
 
 - [Installation Guide](installation.md) - Set up the package
 - [Operations Reference](operations.md) - Detailed operation docs
-- [MCP Server](mcp.md) - Use with external AI agents
+- [MCP Server](mcp.md) - Use with external AI agents (Claude, etc.)

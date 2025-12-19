@@ -1,5 +1,6 @@
 /**
  * Tests for PgVectorStoreTool - AI Agent tool for vector store operations
+ * Operations: Remember, Recall, Forget, Lookup
  */
 
 import { PgVectorStoreTool } from '../../nodes/PgVectorStoreTool.node';
@@ -44,7 +45,7 @@ describe('PgVectorStoreTool', () => {
   });
 
   describe('node properties', () => {
-    it('should have operation selector with all operations', () => {
+    it('should have operation selector with intuitive operations', () => {
       const properties = toolNode.description.properties;
       const operationProp = properties.find(p => p.name === 'operation');
 
@@ -52,7 +53,8 @@ describe('PgVectorStoreTool', () => {
       expect(operationProp?.type).toBe('options');
 
       const options = operationProp?.options as Array<{ value: string }>;
-      expect(options.map(o => o.value)).toEqual(['query', 'upsert', 'delete', 'get']);
+      // New intuitive operation names
+      expect(options.map(o => o.value)).toEqual(['recall', 'remember', 'forget', 'lookup']);
     });
 
     it('should have collection name property', () => {
@@ -62,7 +64,7 @@ describe('PgVectorStoreTool', () => {
       expect(collectionProp).toBeDefined();
       expect(collectionProp?.type).toBe('string');
       expect(collectionProp?.required).toBe(true);
-      expect(collectionProp?.default).toBe('documents');
+      expect(collectionProp?.default).toBe('knowledge');
     });
 
     it('should have tool description property', () => {
@@ -73,21 +75,18 @@ describe('PgVectorStoreTool', () => {
       expect(descProp?.type).toBe('string');
     });
 
-    it('should have query-specific properties', () => {
+    it('should have recall-specific properties', () => {
       const properties = toolNode.description.properties;
 
       const topKProp = properties.find(p => p.name === 'topK');
       expect(topKProp).toBeDefined();
-      expect(topKProp?.default).toBe(10);
-      expect(topKProp?.displayOptions?.show?.operation).toContain('query');
+      expect(topKProp?.default).toBe(5);
+      expect(topKProp?.displayOptions?.show?.operation).toContain('recall');
 
       const distanceMetricProp = properties.find(p => p.name === 'distanceMetric');
       expect(distanceMetricProp).toBeDefined();
-      expect(distanceMetricProp?.displayOptions?.show?.operation).toContain('query');
-
-      const includeContentProp = properties.find(p => p.name === 'includeContent');
-      expect(includeContentProp).toBeDefined();
-      expect(includeContentProp?.default).toBe(true);
+      expect(distanceMetricProp?.displayOptions?.show?.operation).toContain('recall');
+      expect(distanceMetricProp?.displayOptions?.show?.operation).toContain('forget');
     });
   });
 
@@ -111,5 +110,30 @@ describe('PgVectorStoreTool documentation', () => {
 
     expect(docUrl).toBeDefined();
     expect(docUrl).toContain('ai-tools');
+  });
+});
+
+describe('Operation names and descriptions', () => {
+  it('should have user-friendly operation names', () => {
+    const toolNode = new PgVectorStoreTool();
+    const operationProp = toolNode.description.properties.find(p => p.name === 'operation');
+    const options = operationProp?.options as Array<{ name: string; value: string; description: string }>;
+
+    // Check that operations have descriptive names
+    const recallOp = options.find(o => o.value === 'recall');
+    expect(recallOp?.name).toContain('Recall');
+    expect(recallOp?.name).toContain('Search');
+
+    const rememberOp = options.find(o => o.value === 'remember');
+    expect(rememberOp?.name).toContain('Remember');
+    expect(rememberOp?.name).toContain('Store');
+
+    const forgetOp = options.find(o => o.value === 'forget');
+    expect(forgetOp?.name).toContain('Forget');
+    expect(forgetOp?.name).toContain('Delete');
+
+    const lookupOp = options.find(o => o.value === 'lookup');
+    expect(lookupOp?.name).toContain('Lookup');
+    expect(lookupOp?.name).toContain('Get');
   });
 });
