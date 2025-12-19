@@ -2,6 +2,40 @@
 
 Advanced PGVector + Postgres nodes for n8n with full CRUD control, removing all limitations of the built-in PGVector node.
 
+## Quick Install
+
+Run the interactive installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/aaron777collins/BetterPGVectorN8N/main/install.sh | bash
+```
+
+Or download and run locally:
+
+```bash
+wget https://raw.githubusercontent.com/aaron777collins/BetterPGVectorN8N/main/install.sh
+chmod +x install.sh
+./install.sh
+```
+
+The installer auto-detects your n8n setup (Docker Compose, running container, npm) and offers the best installation method.
+
+**One-liner options:**
+
+```bash
+# Create standalone n8n + pgvector Docker setup
+./install.sh --standalone
+
+# Add to existing Docker Compose
+./install.sh --docker
+
+# Install into running container
+./install.sh --direct
+
+# Install via npm to ~/.n8n/nodes
+./install.sh --npm
+```
+
 ## Features
 
 - **Full CRUD Operations**: Upsert, Query, Delete, and Get embeddings with complete control
