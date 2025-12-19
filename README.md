@@ -1,359 +1,150 @@
 # n8n-nodes-pgvector-advanced
 
-Advanced PGVector + Postgres nodes for n8n with full CRUD control, removing all limitations of the built-in PGVector node.
+Advanced PGVector nodes for n8n with full CRUD control. No more limitations of the built-in node.
 
-## Quick Install
-
-Run the interactive installer:
+## Install in 30 Seconds
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aaron777collins/BetterPGVectorN8N/main/install.sh | bash
+bash <(curl -fsSL https://raw.githubusercontent.com/aaron777collins/BetterPGVectorN8N/main/install.sh)
 ```
 
-Or download and run locally:
+That's it! The installer auto-detects your setup and does the right thing.
+
+<details>
+<summary><b>What does the installer do?</b></summary>
+
+The script detects your n8n environment and offers the best option:
+
+| Your Setup | What It Does |
+|------------|--------------|
+| Docker Compose | Creates persistent setup that survives rebuilds |
+| Running Container | Installs directly into the container |
+| npm/Local Install | Adds to ~/.n8n/nodes |
+| Nothing Found | Creates fresh n8n + pgvector stack |
+
+</details>
+
+<details>
+<summary><b>Manual install options</b></summary>
 
 ```bash
-wget https://raw.githubusercontent.com/aaron777collins/BetterPGVectorN8N/main/install.sh
+# Download installer first
+curl -fsSL https://raw.githubusercontent.com/aaron777collins/BetterPGVectorN8N/main/install.sh -o install.sh
 chmod +x install.sh
-./install.sh
+
+# Then pick your method:
+./install.sh --standalone   # New n8n + pgvector Docker setup
+./install.sh --docker       # Add to existing Docker Compose
+./install.sh --direct       # Install into running container
+./install.sh --npm          # Install to ~/.n8n/nodes
 ```
 
-The installer auto-detects your n8n setup (Docker Compose, running container, npm) and offers the best installation method.
+Or via n8n UI: **Settings → Community Nodes → Install → `n8n-nodes-pgvector-advanced`**
 
-**One-liner options:**
+</details>
 
-```bash
-# Create standalone n8n + pgvector Docker setup
-./install.sh --standalone
+---
 
-# Add to existing Docker Compose
-./install.sh --docker
+## Why Use This?
 
-# Install into running container
-./install.sh --direct
+| Built-in PGVector Node | This Package |
+|------------------------|--------------|
+| Insert only | Full CRUD (Upsert, Query, Delete, Get) |
+| No stable IDs | External IDs for reliable syncing |
+| Basic queries | Filters, pagination, multiple distance metrics |
+| Single inserts | Batch operations (1000+ embeddings) |
+| Manual schema | Auto table/index creation |
 
-# Install via npm to ~/.n8n/nodes
-./install.sh --npm
+---
+
+## Quick Start
+
+### 1. Set Up Credentials
+
+In n8n: **Credentials → Add → Postgres**
+
+```
+Host: your-postgres-host
+Port: 5432
+Database: your_db
+User: your_user
+Password: your_password
 ```
 
-## Features
+### 2. Initialize Schema
 
-- **Full CRUD Operations**: Upsert, Query, Delete, and Get embeddings with complete control
-- **Stable IDs**: Support both internal UUIDs and external IDs for reliable upstream integration
-- **Advanced Querying**: Vector similarity search with metadata filters, pagination, and multiple distance metrics
-- **Batch Operations**: Efficient batch inserts and updates
-- **Schema Management**: Automatic table creation, indexing (HNSW/IVFFlat), and schema validation
-- **Production-Ready**: Connection pooling, error handling, retries, and comprehensive testing
-- **Type-Safe**: Full TypeScript implementation with strict typing
+Add a **PGVector Advanced** node with:
+- Operation: `Admin`
+- Admin Operation: `Ensure Schema`
+- Dimensions: `1536` (or your embedding size)
 
-## Installation
+### 3. Store Embeddings
 
-### From npm (when published)
-
-```bash
-npm install n8n-nodes-pgvector-advanced
+```
+Operation: Upsert
+Collection: my_documents
+External ID: doc-123
+Content: "Your document text"
+Embedding: [0.1, 0.2, 0.3, ...]
+Metadata: {"category": "tech", "author": "Jane"}
 ```
 
-### From source
+### 4. Search
 
-```bash
-git clone <repository-url>
-cd n8n-nodes-pgvector-advanced
-npm install
-npm run build
+```
+Operation: Query
+Collection: my_documents
+Query Embedding: [0.1, 0.2, ...]
+Top K: 10
+Distance Metric: cosine
 ```
 
-### Install in n8n
+---
 
-1. Navigate to your n8n installation directory
-2. Install the package:
-   ```bash
-   npm install n8n-nodes-pgvector-advanced
-   ```
-3. Restart n8n
+## Operations
 
-For local development:
-```bash
-# In the package directory
-npm link
-
-# In your n8n directory
-npm link n8n-nodes-pgvector-advanced
-```
-
-### Docker Installation (Persistent)
-
-For Docker deployments, community nodes need special handling to persist across container rebuilds. See [`examples/docker/`](examples/docker/) for a complete setup.
-
-**Quick start:**
-
-```bash
-cd examples/docker
-docker compose up -d
-```
-
-**How it works:**
-
-The setup uses a custom Dockerfile that runs an init script on startup to auto-install community nodes:
-
-```dockerfile
-FROM docker.n8n.io/n8nio/n8n:latest
-
-USER root
-COPY init-nodes.sh /init-nodes.sh
-RUN chmod 755 /init-nodes.sh && chown node:node /init-nodes.sh
-
-USER node
-ENTRYPOINT ["/bin/sh", "-c", "/init-nodes.sh && exec n8n \"$@\"", "--"]
-```
-
-The `init-nodes.sh` script installs packages to the persistent volume on each startup:
-
-```sh
-#!/bin/sh
-PACKAGES="n8n-nodes-pgvector-advanced"
-NODES_DIR="/home/node/.n8n/nodes"
-
-mkdir -p "$NODES_DIR"
-cd "$NODES_DIR"
-
-if [ ! -f "package.json" ]; then
-    npm init -y > /dev/null 2>&1
-fi
-
-for pkg in $PACKAGES; do
-    if [ ! -d "node_modules/$pkg" ]; then
-        echo "Installing community node: $pkg"
-        npm install "$pkg" --save
-    fi
-done
-```
-
-**Adding more community nodes:**
-
-Edit `init-nodes.sh` and add packages to the `PACKAGES` variable:
-
-```sh
-PACKAGES="n8n-nodes-pgvector-advanced another-package third-package"
-```
-
-Then rebuild: `docker compose build && docker compose up -d`
-
-## Prerequisites
-
-- PostgreSQL 12+ with pgvector extension installed
-- n8n instance (self-hosted or cloud)
-
-### Install pgvector
-
-```sql
--- Using Docker
-docker run -d -p 5432:5432 -e POSTGRES_PASSWORD=password ankane/pgvector
-
--- Or install manually
--- See: https://github.com/pgvector/pgvector#installation
-CREATE EXTENSION IF NOT EXISTS vector;
-```
-
-## Database Schema
-
-The package uses a single, optimized table structure:
-
-```sql
-CREATE TABLE embeddings (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  collection TEXT NOT NULL,
-  external_id TEXT,
-  content TEXT,
-  metadata JSONB NOT NULL DEFAULT '{}',
-  embedding VECTOR(dimensions) NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE(collection, external_id)
-);
-
--- Indexes
-CREATE INDEX idx_embeddings_metadata ON embeddings USING GIN (metadata);
-CREATE INDEX idx_embeddings_{collection}_hnsw ON embeddings
-  USING hnsw (embedding vector_cosine_ops)
-  WHERE collection = 'your_collection';
-```
-
-## Usage
-
-### 1. Configure Credentials
-
-In n8n, add new Postgres credentials:
-
-- **Host**: Your PostgreSQL host
-- **Port**: 5432 (default)
-- **Database**: Your database name
-- **User**: Database user
-- **Password**: Database password
-- **SSL**: Configure as needed
-- **Connection Pool**: Max connections (default: 20)
-
-### 2. Upsert Embeddings
-
-**Single Upsert**
+### Upsert (Insert/Update)
 
 ```json
 {
   "operation": "upsert",
-  "mode": "single",
   "collection": "documents",
   "externalId": "doc-123",
-  "content": "This is a sample document about AI",
-  "metadata": {
-    "category": "technology",
-    "author": "John Doe",
-    "published": "2024-01-01"
-  },
-  "embedding": [0.1, 0.2, 0.3, ...]
-}
-```
-
-**Batch Upsert**
-
-Map input items to embeddings using field mapping:
-
-```json
-{
-  "operation": "upsert",
-  "mode": "batch",
-  "collection": "documents",
-  "fieldMapping": {
-    "idField": "id",
-    "externalIdField": "docId",
-    "contentField": "text",
-    "metadataField": "meta",
-    "embeddingField": "vector"
-  }
-}
-```
-
-Input items:
-```json
-[
-  {
-    "docId": "doc-1",
-    "text": "First document",
-    "meta": {"category": "tech"},
-    "vector": [0.1, 0.2, ...]
-  },
-  {
-    "docId": "doc-2",
-    "text": "Second document",
-    "meta": {"category": "science"},
-    "vector": [0.3, 0.4, ...]
-  }
-]
-```
-
-### 3. Query Similar Embeddings
-
-**Basic Similarity Search**
-
-```json
-{
-  "operation": "query",
-  "collection": "documents",
-  "queryEmbedding": [0.1, 0.2, 0.3, ...],
-  "topK": 10,
-  "distanceMetric": "cosine"
-}
-```
-
-**With Metadata Filter**
-
-```json
-{
-  "operation": "query",
-  "collection": "documents",
-  "queryEmbedding": [0.1, 0.2, ...],
-  "topK": 5,
-  "metadataFilter": {
-    "category": "technology",
-    "published": "2024-01-01"
-  }
-}
-```
-
-**With Pagination**
-
-```json
-{
-  "operation": "query",
-  "collection": "documents",
-  "queryEmbedding": [0.1, 0.2, ...],
-  "topK": 20,
-  "offset": 40,  // Skip first 40 results
-  "distanceMetric": "l2"
-}
-```
-
-Query results include:
-```json
-{
-  "id": "uuid-here",
-  "externalId": "doc-123",
-  "collection": "documents",
   "content": "Document text",
   "metadata": {"category": "tech"},
-  "score": 0.23  // Lower is more similar
+  "embedding": [0.1, 0.2, ...]
 }
 ```
 
-### 4. Delete Embeddings
+**Batch mode:** Map fields from input items for bulk inserts.
 
-**Delete by ID**
+### Query (Similarity Search)
 
 ```json
 {
-  "operation": "delete",
-  "deleteBy": "id",
-  "deleteIds": "uuid-1, uuid-2, uuid-3"
+  "operation": "query",
+  "collection": "documents",
+  "queryEmbedding": [0.1, 0.2, ...],
+  "topK": 10,
+  "distanceMetric": "cosine",
+  "metadataFilter": {"category": "tech"}
 }
 ```
 
-**Delete by External ID**
+### Delete
 
 ```json
 {
   "operation": "delete",
   "collection": "documents",
   "deleteBy": "externalId",
-  "deleteExternalIds": "doc-1, doc-2, doc-3"
+  "deleteExternalIds": "doc-1, doc-2"
 }
 ```
 
-**Delete by Metadata Filter**
+Delete by: `id`, `externalId`, or `metadata` filter.
 
-```json
-{
-  "operation": "delete",
-  "collection": "documents",
-  "deleteBy": "metadata",
-  "deleteMetadataFilter": {
-    "status": "archived",
-    "year": 2020
-  }
-}
-```
-
-### 5. Get Embeddings
-
-**Get by ID**
-
-```json
-{
-  "operation": "get",
-  "getBy": "id",
-  "getIds": "uuid-1, uuid-2"
-}
-```
-
-**Get by External ID**
+### Get
 
 ```json
 {
@@ -364,287 +155,91 @@ Query results include:
 }
 ```
 
-### 6. Admin Operations
+### Admin
 
-**Ensure Schema**
+| Operation | What It Does |
+|-----------|--------------|
+| `ensureSchema` | Creates table + indexes if missing |
+| `createIndex` | Adds HNSW or IVFFlat vector index |
+| `dropCollection` | Deletes all records in a collection |
 
-Creates table and indexes if they don't exist:
-
-```json
-{
-  "operation": "admin",
-  "adminOperation": "ensureSchema",
-  "dimensions": 1536
-}
-```
-
-**Create Vector Index**
-
-```json
-{
-  "operation": "admin",
-  "adminOperation": "createIndex",
-  "adminCollection": "documents",
-  "indexType": "hnsw",  // or "ivfflat"
-  "adminDistanceMetric": "cosine"
-}
-```
-
-**Drop Collection**
-
-Deletes all records in a collection:
-
-```json
-{
-  "operation": "admin",
-  "adminOperation": "dropCollection",
-  "adminCollection": "documents"
-}
-```
+---
 
 ## Distance Metrics
 
-| Metric | When to Use | SQL Operator |
-|--------|-------------|--------------|
-| **Cosine** | Normalized vectors, text embeddings (OpenAI, etc.) | `<=>` |
-| **L2 (Euclidean)** | Absolute distance matters | `<->` |
-| **Inner Product** | Already normalized, dot product similarity | `<#>` |
+| Metric | Best For |
+|--------|----------|
+| **Cosine** | Text embeddings (OpenAI, Cohere, etc.) |
+| **L2** | When absolute distance matters |
+| **Inner Product** | Pre-normalized vectors |
 
-## Index Types
-
-| Type | Build Time | Query Speed | Best For |
-|------|------------|-------------|----------|
-| **HNSW** | Slower | Faster | High recall, production queries |
-| **IVFFlat** | Faster | Good | Large datasets, faster indexing |
+---
 
 ## Example Workflows
 
-### Semantic Search Pipeline
+**Semantic Search:**
+1. Parse documents → Generate embeddings (OpenAI) → Upsert to PGVector → Query similar
 
-1. **Extract Documents** → Parse PDFs/text
-2. **Generate Embeddings** → Call OpenAI/Cohere API
-3. **Upsert to PGVector** → Store with metadata
-4. **Query** → Search similar documents
+**Deduplication:**
+1. Query existing → If similarity > threshold, skip → Else upsert
 
-### Deduplication
+**Sync from External System:**
+1. Use `externalId` to upsert → Automatically updates existing or inserts new
 
-1. **Query existing** → Check if similar document exists
-2. **If score > threshold** → Skip (duplicate)
-3. **Else** → Upsert new document
+---
 
-### Incremental Updates
+## Docker Persistence (How It Works)
 
-1. **Upsert by externalId** → Updates existing or inserts new
-2. **Automatic timestamp tracking** → `updated_at` auto-updated
-3. **No data loss** → Stable IDs prevent duplicates
-
-## Performance
-
-- **Batch Operations**: Process 1000+ embeddings efficiently
-- **Connection Pooling**: Reuse connections (configurable pool size)
-- **Index Optimization**: HNSW for fast queries, IVFFlat for large datasets
-- **Pagination Support**: Handle large result sets
-
-### Benchmarks
-
-With HNSW index on 1M embeddings (1536 dimensions):
-- Query time: <50ms for top-10 results
-- Insert rate: ~1000 embeddings/sec (batched)
-- Update rate: ~800 embeddings/sec
-
-## Development
-
-### Setup
-
-```bash
-npm install
-```
-
-### Run Tests
-
-```bash
-# Start test database
-npm run docker:up
-
-# Run all tests
-npm test
-
-# Run integration tests only
-npm run test:integration
-
-# Run unit tests only
-npm run test:unit
-```
-
-### Build
-
-```bash
-npm run build
-```
-
-### Linting
-
-```bash
-npm run lint
-npm run lint:fix
-```
-
-## Architecture
+The installer creates a custom Dockerfile that auto-installs community nodes on startup:
 
 ```
-n8n-nodes-pgvector-advanced/
-├── lib/
-│   ├── db.ts              # Database connection pooling
-│   ├── sqlBuilder.ts      # Safe SQL construction
-│   ├── pgvector.ts        # PGVector schema management
-│   └── vectorstore.ts     # High-level CRUD operations
-├── nodes/
-│   └── PgvectorVectorStore.node.ts
-├── credentials/
-│   └── Postgres.credentials.ts
-└── tests/
-    ├── unit/
-    └── integration/
+n8n/
+├── Dockerfile        # Extends official n8n image
+└── init-nodes.sh     # Installs packages on container start
 ```
 
-## API Reference
+To add more packages, edit `init-nodes.sh`:
 
-### VectorStoreOperations
-
-```typescript
-// Upsert
-await vectorStore.upsert({
-  collection: string,
-  id?: string,
-  externalId?: string,
-  content?: string,
-  metadata?: Record<string, any>,
-  embedding: number[]
-});
-
-// Query
-await vectorStore.query({
-  collection: string,
-  embedding: number[],
-  topK?: number,
-  offset?: number,
-  distanceMetric?: 'cosine' | 'l2' | 'inner_product',
-  metadataFilter?: Record<string, any>,
-  includeEmbedding?: boolean
-});
-
-// Delete
-await vectorStore.delete({
-  id?: string | string[],
-  collection?: string,
-  externalId?: string | string[],
-  metadataFilter?: Record<string, any>
-});
-
-// Get
-await vectorStore.get({
-  id?: string | string[],
-  collection?: string,
-  externalId?: string | string[]
-});
+```sh
+PACKAGES="n8n-nodes-pgvector-advanced other-package"
 ```
+
+Then: `docker compose build && docker compose up -d`
+
+---
 
 ## Troubleshooting
 
-### pgvector extension not found
-
+**"pgvector extension not found"**
 ```sql
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-### Dimension mismatch
+**Slow queries?**
+- Create an HNSW index via Admin → Create Index
+- Use metadata filters to reduce search space
 
-Ensure all embeddings in a table have the same dimensions. Use different collections for different embedding models.
+**Dimension mismatch?**
+- All embeddings in a collection must have the same dimensions
+- Use different collections for different embedding models
 
-### Slow queries
+---
 
-1. Create appropriate vector index (HNSW recommended)
-2. Create GIN index on metadata for filter queries
-3. Use connection pooling
-4. Consider pagination for large result sets
-
-### Connection pool exhausted
-
-Increase `max` in credentials configuration or reduce concurrent operations.
-
-## Migration from Built-in PGVector Node
-
-1. Export your data using the built-in node
-2. Run `Ensure Schema` admin operation
-3. Batch upsert your data with `externalId` field
-4. Create indexes for your collections
-5. Update workflows to use new node
-
-## Publishing
-
-This package is automatically published to npm when a version tag is pushed to GitHub.
-
-### Publishing Process
-
-1. **Update version in package.json**
-   ```bash
-   npm version patch  # or minor, or major
-   ```
-
-2. **Push changes and tags**
-   ```bash
-   git push origin main
-   git push origin --tags
-   ```
-
-3. **Automated workflow**
-   - GitHub Actions will automatically run tests
-   - Build the package
-   - Verify the version tag matches package.json
-   - Publish to npm with provenance
-   - Create a GitHub release
-
-### Prerequisites
-
-- The `NPM_TOKEN` secret must be configured in GitHub repository settings
-- The version must not already exist on npm
-- All tests must pass
-- The version tag must match the package.json version
-
-### Manual Publishing (if needed)
+## Development
 
 ```bash
+git clone https://github.com/aaron777collins/BetterPGVectorN8N.git
+cd BetterPGVectorN8N
+npm install
 npm run build
-npm pack --dry-run  # Verify contents
-npm publish --access public
+npm test
 ```
 
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new features
-4. Run `npm test` and `npm run lint`
-5. Submit a pull request
+---
 
 ## License
 
 MIT
-
-## Support
-
-- GitHub Issues: Report bugs and feature requests
-- Documentation: See `/docs` directory for detailed guides
-- Examples: See `/examples` directory for workflow examples
-
-## Credits
-
-Built with:
-- [n8n](https://n8n.io/) - Workflow automation
-- [pgvector](https://github.com/pgvector/pgvector) - Vector similarity search
-- [node-postgres](https://node-postgres.com/) - PostgreSQL client
 
 ---
 
