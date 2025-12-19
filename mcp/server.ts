@@ -410,13 +410,14 @@ export class PgVectorMcpServer {
     }
 
     switch (args.operation) {
-      case 'ensureSchema':
+      case 'ensureSchema': {
         const dimensions = args.dimensions || 1536;
         await this.pgvectorManager.ensureExtension();
         await this.pgvectorManager.ensureTable(dimensions);
         return this.successResult({ success: true, operation: 'ensureSchema', dimensions });
+      }
 
-      case 'createIndex':
+      case 'createIndex': {
         if (!args.collection) {
           return this.errorResult('Missing collection for createIndex');
         }
@@ -428,8 +429,9 @@ export class PgVectorMcpServer {
             : DistanceMetric.COSINE;
         await this.pgvectorManager.ensureIndex(args.collection, indexType, distanceMetric);
         return this.successResult({ success: true, operation: 'createIndex', collection: args.collection });
+      }
 
-      case 'dropCollection':
+      case 'dropCollection': {
         if (!args.collection) {
           return this.errorResult('Missing collection for dropCollection');
         }
@@ -440,6 +442,7 @@ export class PgVectorMcpServer {
           collection: args.collection,
           deletedCount: dropResult.deletedCount,
         });
+      }
 
       default:
         return this.errorResult('Invalid operation: must be ensureSchema, createIndex, or dropCollection');

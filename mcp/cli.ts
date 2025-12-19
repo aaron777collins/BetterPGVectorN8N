@@ -85,7 +85,7 @@ async function main() {
           });
           break;
 
-        case 'tools/call':
+        case 'tools/call': {
           const { name, arguments: args } = request.params || {};
           const result = await server.callTool(name, args || {});
           sendResponse({
@@ -94,6 +94,7 @@ async function main() {
             result: result,
           });
           break;
+        }
 
         case 'shutdown':
           await server.close();

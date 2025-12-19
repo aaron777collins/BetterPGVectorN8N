@@ -29,7 +29,8 @@
   "include": [
     "nodes/**/*",
     "credentials/**/*",
-    "lib/**/*"
+    "lib/**/*",
+    "mcp/**/*"
   ],
   "exclude": [
     "node_modules",
