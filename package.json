@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-pgvector-advanced",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Advanced PGVector + Postgres nodes for n8n with full CRUD control",
   "license": "MIT",
   "homepage": "https://aaron777collins.github.io/BetterPGVectorN8N/",
@@ -20,7 +20,7 @@
     "lint:fix": "eslint . --ext .ts --fix",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:integration": "jest --selectProjects=integration",
+    "test:integration": "jest --selectProjects=integration --runInBand",
     "test:unit": "jest --selectProjects=unit",
     "test:e2e": "jest --selectProjects=e2e",
     "docker:up": "docker compose up -d",
