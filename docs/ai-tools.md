@@ -57,8 +57,10 @@ Store new information or update existing entries.
 | Setting | Description |
 |---------|-------------|
 | Collection | Knowledge base name |
-| Distance Metric | For concept-based updates |
+| ID Format Hint | Example ID format to guide the AI (e.g., "meeting-2024-01-15") |
+| Auto-Generate ID | Automatically create IDs when AI doesn't provide one |
 | Update Similarity Threshold | Min similarity to allow concept-based update (default: 0.7) |
+| Distance Metric | For concept-based updates (cosine, l2, inner_product) |
 
 **AI provides:**
 | Parameter | Description |
@@ -73,11 +75,19 @@ Store new information or update existing entries.
 Create new:
 > "Remember that the API key expires on January 15th"
 
+Create with specific ID:
+> "Remember with ID 'api-expiry': The API key expires January 15th"
+
 Update by ID:
 > "Update entry 'api-info' with the new expiration date"
 
 Update by concept:
 > "Update the information about API keys with this new content: ..."
+
+**How it works in n8n:**
+1. Configure `ID Format Hint` to "api-v1-info" so the AI uses consistent IDs
+2. Enable `Auto-Generate ID` if you don't need specific IDs
+3. Set `Update Similarity Threshold` to 0.8 for strict concept matching
 
 ### Recall (Search)
 
@@ -102,6 +112,10 @@ Search for similar information.
 
 > "Find all meeting notes from Q1"
 
+**How it works in n8n:**
+1. Set `Minimum Similarity` to 0.6 to filter out weak matches
+2. Use `Top K Results` = 3 for focused responses, 10 for comprehensive
+
 ### Forget (Delete by ID)
 
 Delete a specific entry by its exact ID.
@@ -110,6 +124,8 @@ Delete a specific entry by its exact ID.
 | Setting | Description |
 |---------|-------------|
 | Collection | Knowledge base name |
+| ID Format Hint | Example ID format so AI knows what IDs look like |
+| Return Deleted Content | Show what was deleted (useful for confirmation) |
 
 **AI provides:**
 | Parameter | Description |
@@ -118,6 +134,10 @@ Delete a specific entry by its exact ID.
 
 **Example AI interactions:**
 > "Delete the entry with ID 'old-notes-123'"
+
+**How it works in n8n:**
+1. Set `ID Format Hint` to match your ID scheme (e.g., "doc-123")
+2. Enable `Return Deleted Content` for audit trails or confirmations
 
 ### Forget Similar (Delete by Concept)
 
@@ -139,7 +159,10 @@ Delete entries similar to a concept. Has safety controls.
 **Example AI interactions:**
 > "Delete all information about the deprecated API"
 
-With Dry Run ON, the tool shows what would be deleted. Set Dry Run OFF to actually delete.
+**How it works in n8n:**
+1. Keep `Dry Run` ON for safety - shows what would be deleted
+2. Set `Similarity Threshold` to 0.9 for very precise matching
+3. Create a separate workflow with `Dry Run` OFF for actual deletion
 
 ### Lookup (Get by ID)
 
@@ -149,6 +172,9 @@ Retrieve a specific entry by its exact ID.
 | Setting | Description |
 |---------|-------------|
 | Collection | Knowledge base name |
+| ID Format Hint | Example ID format so AI knows what IDs look like |
+| Include Metadata | Show metadata tags in response (default: ON) |
+| Include Timestamps | Show created/updated times (default: ON) |
 
 **AI provides:**
 | Parameter | Description |
@@ -157,6 +183,10 @@ Retrieve a specific entry by its exact ID.
 
 **Example AI interactions:**
 > "Show me the entry with ID 'meeting-notes-jan'"
+
+**How it works in n8n:**
+1. Set `ID Format Hint` to help AI recognize valid IDs
+2. Disable `Include Timestamps` if you don't need date info
 
 ---
 
@@ -173,11 +203,17 @@ Tools are automatically named based on collection:
 
 ## Configuration vs AI Parameters
 
-The design philosophy is:
-- **n8n Configuration**: Safety settings, thresholds, limits
-- **AI Parameters**: The actual data and targets
+The design philosophy separates concerns:
 
-This means users control safety (thresholds, dry run) while the AI handles the content.
+| Controlled by | Purpose | Examples |
+|---------------|---------|----------|
+| **n8n Configuration** | Safety, limits, behavior | Thresholds, dry run, ID hints |
+| **AI Runtime** | Data and targets | Content, IDs, search queries |
+
+This means:
+- **Users** control safety (thresholds, dry run mode) via n8n UI
+- **AI** handles the data (what to store, what to search for)
+- **ID Format Hints** guide the AI without enforcing - they appear in tool descriptions
 
 ---
 
@@ -194,6 +230,12 @@ Chat Trigger → AI Agent → OpenAI Chat Model
               PGVector Store Tool (Lookup) → OpenAI Embeddings
 ```
 
+**Configuration:**
+- Remember: ID Format Hint = "note-YYYY-MM-DD", Auto-Generate ID = ON
+- Recall: Top K = 5, Minimum Similarity = 0.5
+- Forget: ID Format Hint = "note-YYYY-MM-DD", Return Deleted Content = ON
+- Lookup: Include Metadata = ON, Include Timestamps = ON
+
 ### Safe Cleanup Workflow
 
 ```
@@ -204,29 +246,71 @@ Chat Trigger → AI Agent → OpenAI Chat Model
 
 First run with Dry Run to see what would be deleted, then create another workflow with Dry Run OFF for actual deletion.
 
+### Meeting Notes Assistant
+
+```
+Chat Trigger → AI Agent → OpenAI Chat Model
+                    ↓
+              PGVector Store Tool (Remember) → OpenAI Embeddings
+                    ↓
+              PGVector Store Tool (Recall) → OpenAI Embeddings
+```
+
+**Configuration:**
+- Remember:
+  - ID Format Hint = "meeting-2024-01-15-standup"
+  - Auto-Generate ID = OFF (AI provides structured IDs)
+  - Update Similarity Threshold = 0.85
+- Recall:
+  - Top K = 10
+  - Minimum Similarity = 0.6
+
+**User interaction:**
+> User: "Remember today's standup: John discussed the API migration"
+> AI: Uses `remember_meetings` with ID "meeting-2024-01-15-standup"
+
+> User: "What did we discuss about APIs last week?"
+> AI: Uses `recall_meetings` to search
+
 ---
 
 ## Best Practices
 
-### 1. Use IDs for Important Entries
+### 1. Use ID Format Hints
 
-When storing information you'll want to update later:
+Set the ID Format Hint in n8n to guide the AI:
 ```
-AI: "Remember this with ID 'weekly-schedule': Team meetings are Fridays at 2pm"
+meeting-2024-01-15-standup
+doc-api-v2-guide
+note-project-alpha-123
 ```
 
-### 2. Use Concept Updates Carefully
+The hint appears in the tool description, helping the AI use consistent IDs.
+
+### 2. Enable Auto-Generate ID for Simple Cases
+
+When you don't need specific IDs, enable Auto-Generate ID:
+- Creates IDs like `knowledge-1705315200000-x7k2m9`
+- Prevents missing IDs when AI forgets to provide one
+
+### 3. Use Concept Updates Carefully
 
 The updateSimilar feature is powerful but should have a reasonable threshold:
-- 0.8+ for strict matching
-- 0.7 for moderate matching
+- 0.85+ for strict matching (production)
+- 0.7 for moderate matching (development)
 - Below 0.6 may match unintended entries
 
-### 3. Always Dry Run First
+### 4. Always Dry Run First
 
 When using Forget Similar, always test with Dry Run ON to see what would be deleted.
 
-### 4. Organize with Metadata
+### 5. Return Deleted Content for Auditing
+
+Enable "Return Deleted Content" on Forget to:
+- Confirm the right entry was deleted
+- Provide audit trail for users
+
+### 6. Organize with Metadata
 
 ```json
 {
@@ -237,6 +321,8 @@ When using Forget Similar, always test with Dry Run ON to see what would be dele
   }
 }
 ```
+
+Use with Recall's filter parameter to narrow searches.
 
 ---
 
@@ -255,6 +341,13 @@ The found entry isn't similar enough to the search concept. Either:
 ### "Dry run - would delete X entries"
 
 This is expected! Disable Dry Run in n8n config to actually delete.
+
+### AI doesn't use the ID format I specified
+
+ID Format Hint is guidance, not enforcement. To ensure consistent IDs:
+1. Make the hint clearer (e.g., "project-YYYYMMDD-topic")
+2. Include format in your prompts to the AI
+3. Or enable Auto-Generate ID for automatic IDs
 
 ---
 

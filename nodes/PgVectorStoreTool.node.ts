@@ -34,17 +34,27 @@ function createRememberTool(
   embeddings: EmbeddingsModel,
   vectorStore: VectorStoreOperations,
   distanceMetric: DistanceMetric,
-  updateThreshold: number
+  updateThreshold: number,
+  idFormatHint: string,
+  autoGenerateId: boolean
 ): DynamicStructuredTool {
-  const toolDescription = description ||
+  let toolDescription = description ||
     `Store information in the "${collection}" knowledge base. Provide ID to update by ID, or updateSimilar to find and update similar entry.`;
+
+  if (idFormatHint) {
+    toolDescription += ` Suggested ID format: ${idFormatHint}`;
+  }
+
+  const idDescription = idFormatHint
+    ? `ID for this entry (format: ${idFormatHint})`
+    : 'ID for this entry (provide to update existing)';
 
   return new DynamicStructuredTool({
     name: `remember_${collection.replace(/[^a-zA-Z0-9_]/g, '_')}`,
     description: toolDescription,
     schema: z.object({
       content: z.string().describe('The information to store'),
-      id: z.string().optional().describe('ID to update (if you know the exact ID)'),
+      id: z.string().optional().describe(idDescription),
       updateSimilar: z.string().optional().describe('Find entry similar to this and update it'),
       metadata: z.record(z.unknown()).optional().describe('Tags like {category: "meeting"}'),
     }),
@@ -87,12 +97,18 @@ function createRememberTool(
           return `Updated entry (similarity: ${similarity.toFixed(2)}). ID: ${result.externalId || result.id}`;
         }
 
+        // Auto-generate ID if enabled and not provided
+        let finalId = id;
+        if (!finalId && autoGenerateId) {
+          finalId = `${collection}-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+        }
+
         // Standard upsert by ID
         const result = await vectorStore.upsert({
           collection,
           content,
           embedding,
-          externalId: id,
+          externalId: finalId,
           metadata: (metadata || {}) as Record<string, unknown>,
         });
 
@@ -169,23 +185,46 @@ function createRecallTool(
 function createForgetTool(
   collection: string,
   description: string,
-  vectorStore: VectorStoreOperations
+  vectorStore: VectorStoreOperations,
+  idFormatHint: string,
+  returnDeletedContent: boolean
 ): DynamicStructuredTool {
-  const toolDescription = description ||
+  let toolDescription = description ||
     `Delete an entry from the "${collection}" knowledge base by its exact ID.`;
+
+  if (idFormatHint) {
+    toolDescription += ` ID format example: ${idFormatHint}`;
+  }
+
+  const idDescription = idFormatHint
+    ? `The exact ID to delete (format: ${idFormatHint})`
+    : 'The exact ID of the entry to delete';
 
   return new DynamicStructuredTool({
     name: `forget_${collection.replace(/[^a-zA-Z0-9_]/g, '_')}`,
     description: toolDescription,
     schema: z.object({
-      id: z.string().describe('The exact ID of the entry to delete'),
+      id: z.string().describe(idDescription),
     }),
     func: async ({ id }) => {
       try {
+        // If returnDeletedContent, get the content first
+        let deletedContent = '';
+        if (returnDeletedContent) {
+          const existing = await vectorStore.get({ collection, externalId: id });
+          if (existing.rows.length > 0) {
+            deletedContent = existing.rows[0].content || '';
+          }
+        }
+
         const result = await vectorStore.delete({ collection, externalId: id });
 
         if (result.deletedCount === 0) {
           return `No entry found with ID "${id}"`;
+        }
+
+        if (returnDeletedContent && deletedContent) {
+          return `Deleted entry "${id}". Content was: ${deletedContent.substring(0, 200)}${deletedContent.length > 200 ? '...' : ''}`;
         }
         return `Deleted entry with ID "${id}"`;
       } catch (error) {
@@ -268,16 +307,27 @@ function createForgetSimilarTool(
 function createLookupTool(
   collection: string,
   description: string,
-  vectorStore: VectorStoreOperations
+  vectorStore: VectorStoreOperations,
+  idFormatHint: string,
+  includeMetadata: boolean,
+  includeTimestamps: boolean
 ): DynamicStructuredTool {
-  const toolDescription = description ||
+  let toolDescription = description ||
     `Get a specific entry from the "${collection}" knowledge base by its ID.`;
+
+  if (idFormatHint) {
+    toolDescription += ` ID format example: ${idFormatHint}`;
+  }
+
+  const idDescription = idFormatHint
+    ? `The ID to retrieve (format: ${idFormatHint})`
+    : 'The ID of the entry to retrieve';
 
   return new DynamicStructuredTool({
     name: `lookup_${collection.replace(/[^a-zA-Z0-9_]/g, '_')}`,
     description: toolDescription,
     schema: z.object({
-      id: z.string().describe('The ID of the entry to retrieve'),
+      id: z.string().describe(idDescription),
     }),
     func: async ({ id }) => {
       try {
@@ -294,10 +344,13 @@ function createLookupTool(
         const doc = result.rows[0];
         const lines = [`Entry ID: ${doc.externalId || doc.id}`];
         if (doc.content) lines.push(`\nContent:\n${doc.content}`);
-        if (Object.keys(doc.metadata).length > 0) {
+        if (includeMetadata && Object.keys(doc.metadata).length > 0) {
           lines.push(`\nTags: ${JSON.stringify(doc.metadata)}`);
         }
-        lines.push(`\nCreated: ${doc.createdAt}`);
+        if (includeTimestamps) {
+          lines.push(`\nCreated: ${doc.createdAt}`);
+          if (doc.updatedAt) lines.push(`Updated: ${doc.updatedAt}`);
+        }
 
         return lines.join('');
       } catch (error) {
@@ -448,6 +501,31 @@ export class PgVectorStoreTool implements INodeType {
       },
       // Remember-specific options
       {
+        displayName: 'ID Format Hint',
+        name: 'rememberIdHint',
+        type: 'string',
+        default: '',
+        placeholder: 'e.g., "meeting-2024-01-15", "doc-123"',
+        description: 'Example ID format to suggest to the AI when storing entries',
+        displayOptions: {
+          show: {
+            operation: ['remember'],
+          },
+        },
+      },
+      {
+        displayName: 'Auto-Generate ID',
+        name: 'autoGenerateId',
+        type: 'boolean',
+        default: false,
+        description: 'When enabled, auto-generates an ID if the AI does not provide one',
+        displayOptions: {
+          show: {
+            operation: ['remember'],
+          },
+        },
+      },
+      {
         displayName: 'Update Similarity Threshold',
         name: 'updateThreshold',
         type: 'number',
@@ -494,6 +572,58 @@ export class PgVectorStoreTool implements INodeType {
           },
         },
       },
+      // ID-based operations options (Forget, Lookup)
+      {
+        displayName: 'ID Format Hint',
+        name: 'idFormatHint',
+        type: 'string',
+        default: '',
+        placeholder: 'e.g., "doc-123", "meeting-2024-01-15"',
+        description: 'Example ID format to help the AI understand what IDs look like. Included in tool description.',
+        displayOptions: {
+          show: {
+            operation: ['forget', 'lookup'],
+          },
+        },
+      },
+      // Lookup-specific options
+      {
+        displayName: 'Include Metadata',
+        name: 'includeMetadata',
+        type: 'boolean',
+        default: true,
+        description: 'Include metadata tags in the response',
+        displayOptions: {
+          show: {
+            operation: ['lookup'],
+          },
+        },
+      },
+      {
+        displayName: 'Include Timestamps',
+        name: 'includeTimestamps',
+        type: 'boolean',
+        default: true,
+        description: 'Include created/updated timestamps in the response',
+        displayOptions: {
+          show: {
+            operation: ['lookup'],
+          },
+        },
+      },
+      // Forget-specific options
+      {
+        displayName: 'Return Deleted Content',
+        name: 'returnDeletedContent',
+        type: 'boolean',
+        default: false,
+        description: 'Return the content that was deleted (useful for confirmation)',
+        displayOptions: {
+          show: {
+            operation: ['forget'],
+          },
+        },
+      },
     ],
   };
 
@@ -528,13 +658,15 @@ export class PgVectorStoreTool implements INodeType {
     switch (operation) {
       case 'remember': {
         const updateThreshold = this.getNodeParameter('updateThreshold', 0, 0.7) as number;
+        const idFormatHint = this.getNodeParameter('rememberIdHint', 0, '') as string;
+        const autoGenerateId = this.getNodeParameter('autoGenerateId', 0, false) as boolean;
         const distanceMetricStr = this.getNodeParameter('distanceMetric', 0, 'cosine') as string;
         const distanceMetric = distanceMetricStr === 'l2'
           ? DistanceMetric.L2
           : distanceMetricStr === 'inner_product'
             ? DistanceMetric.INNER_PRODUCT
             : DistanceMetric.COSINE;
-        tool = createRememberTool(collection, customDescription, embeddings, vectorStore, distanceMetric, updateThreshold);
+        tool = createRememberTool(collection, customDescription, embeddings, vectorStore, distanceMetric, updateThreshold, idFormatHint, autoGenerateId);
         break;
       }
 
@@ -551,9 +683,12 @@ export class PgVectorStoreTool implements INodeType {
         break;
       }
 
-      case 'forget':
-        tool = createForgetTool(collection, customDescription, vectorStore);
+      case 'forget': {
+        const idFormatHint = this.getNodeParameter('idFormatHint', 0, '') as string;
+        const returnDeletedContent = this.getNodeParameter('returnDeletedContent', 0, false) as boolean;
+        tool = createForgetTool(collection, customDescription, vectorStore, idFormatHint, returnDeletedContent);
         break;
+      }
 
       case 'forgetSimilar': {
         const threshold = this.getNodeParameter('similarityThreshold', 0, 0.8) as number;
@@ -568,9 +703,13 @@ export class PgVectorStoreTool implements INodeType {
         break;
       }
 
-      case 'lookup':
-        tool = createLookupTool(collection, customDescription, vectorStore);
+      case 'lookup': {
+        const idFormatHint = this.getNodeParameter('idFormatHint', 0, '') as string;
+        const includeMetadata = this.getNodeParameter('includeMetadata', 0, true) as boolean;
+        const includeTimestamps = this.getNodeParameter('includeTimestamps', 0, true) as boolean;
+        tool = createLookupTool(collection, customDescription, vectorStore, idFormatHint, includeMetadata, includeTimestamps);
         break;
+      }
 
       default:
         throw new Error(`Unknown operation: ${operation}`);

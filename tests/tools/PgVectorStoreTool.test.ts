@@ -141,6 +141,46 @@ describe('PgVectorStoreTool', () => {
 
       expect(distanceMetricProp?.displayOptions?.show?.operation).toContain('remember');
     });
+
+    it('should have ID format hint for remember', () => {
+      const properties = toolNode.description.properties;
+      const hintProp = properties.find(p => p.name === 'rememberIdHint');
+
+      expect(hintProp).toBeDefined();
+      expect(hintProp?.type).toBe('string');
+      expect(hintProp?.displayOptions?.show?.operation).toContain('remember');
+    });
+
+    it('should have auto-generate ID option for remember', () => {
+      const properties = toolNode.description.properties;
+      const autoGenProp = properties.find(p => p.name === 'autoGenerateId');
+
+      expect(autoGenProp).toBeDefined();
+      expect(autoGenProp?.type).toBe('boolean');
+      expect(autoGenProp?.default).toBe(false);
+      expect(autoGenProp?.displayOptions?.show?.operation).toContain('remember');
+    });
+  });
+
+  describe('forget-specific properties', () => {
+    it('should have ID format hint for forget', () => {
+      const properties = toolNode.description.properties;
+      const hintProp = properties.find(p => p.name === 'idFormatHint');
+
+      expect(hintProp).toBeDefined();
+      expect(hintProp?.type).toBe('string');
+      expect(hintProp?.displayOptions?.show?.operation).toContain('forget');
+    });
+
+    it('should have return deleted content option for forget', () => {
+      const properties = toolNode.description.properties;
+      const returnProp = properties.find(p => p.name === 'returnDeletedContent');
+
+      expect(returnProp).toBeDefined();
+      expect(returnProp?.type).toBe('boolean');
+      expect(returnProp?.default).toBe(false);
+      expect(returnProp?.displayOptions?.show?.operation).toContain('forget');
+    });
   });
 
   describe('forgetSimilar-specific properties', () => {
@@ -162,6 +202,36 @@ describe('PgVectorStoreTool', () => {
       expect(dryRunProp?.type).toBe('boolean');
       expect(dryRunProp?.default).toBe(true);
       expect(dryRunProp?.displayOptions?.show?.operation).toContain('forgetSimilar');
+    });
+  });
+
+  describe('lookup-specific properties', () => {
+    it('should have ID format hint for lookup', () => {
+      const properties = toolNode.description.properties;
+      const hintProp = properties.find(p => p.name === 'idFormatHint');
+
+      expect(hintProp).toBeDefined();
+      expect(hintProp?.displayOptions?.show?.operation).toContain('lookup');
+    });
+
+    it('should have include metadata option for lookup', () => {
+      const properties = toolNode.description.properties;
+      const metaProp = properties.find(p => p.name === 'includeMetadata');
+
+      expect(metaProp).toBeDefined();
+      expect(metaProp?.type).toBe('boolean');
+      expect(metaProp?.default).toBe(true);
+      expect(metaProp?.displayOptions?.show?.operation).toContain('lookup');
+    });
+
+    it('should have include timestamps option for lookup', () => {
+      const properties = toolNode.description.properties;
+      const tsProp = properties.find(p => p.name === 'includeTimestamps');
+
+      expect(tsProp).toBeDefined();
+      expect(tsProp?.type).toBe('boolean');
+      expect(tsProp?.default).toBe(true);
+      expect(tsProp?.displayOptions?.show?.operation).toContain('lookup');
     });
   });
 
