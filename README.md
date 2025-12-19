@@ -41,9 +41,25 @@ chmod +x install.sh
 ./install.sh --docker       # Add to existing Docker Compose
 ./install.sh --direct       # Install into running container
 ./install.sh --npm          # Install to ~/.n8n/nodes
+./install.sh --update       # Update existing installation
 ```
 
 Or via n8n UI: **Settings → Community Nodes → Install → `n8n-nodes-pgvector-advanced`**
+
+</details>
+
+<details>
+<summary><b>Updating to latest version</b></summary>
+
+```bash
+# Update existing installation
+./install.sh --update
+
+# Or run the installer again - it auto-updates on container restart
+docker compose restart n8n
+```
+
+The Docker init script automatically checks for updates on each container start.
 
 </details>
 
@@ -238,6 +254,25 @@ npm install
 npm run build
 npm test
 ```
+
+---
+
+## MCP Server for AI Agents
+
+This package includes an MCP (Model Context Protocol) server for AI agents like Claude.
+
+```bash
+# Run directly
+npx n8n-nodes-pgvector-advanced
+
+# Or install globally
+npm install -g n8n-nodes-pgvector-advanced
+pgvector-mcp
+```
+
+**Available tools:** `pgvector_upsert`, `pgvector_query`, `pgvector_delete`, `pgvector_get`, `pgvector_admin`
+
+Set environment variables: `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`
 
 ---
 

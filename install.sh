@@ -174,14 +174,15 @@ if [ ! -f "package.json" ]; then
     npm init -y > /dev/null 2>&1
 fi
 
-# Install each package if not present
+# Install or update each package
 for pkg in $PACKAGES; do
     if [ ! -d "node_modules/$pkg" ]; then
         echo "[init-nodes] Installing: $pkg"
         npm install "$pkg" --save --loglevel=warn
         echo "[init-nodes] Installed: $pkg"
     else
-        echo "[init-nodes] Already installed: $pkg"
+        echo "[init-nodes] Checking for updates: $pkg"
+        npm update "$pkg" --loglevel=warn
     fi
 done
 INITSCRIPT
@@ -376,7 +377,8 @@ for pkg in $PACKAGES; do
         echo "[init-nodes] Installing: $pkg"
         npm install "$pkg" --save --loglevel=warn
     else
-        echo "[init-nodes] Already installed: $pkg"
+        echo "[init-nodes] Checking for updates: $pkg"
+        npm update "$pkg" --loglevel=warn
     fi
 done
 INITSCRIPT
@@ -474,6 +476,10 @@ show_menu() {
     fi
 
     # Always available options
+    options+=("update")
+    echo "  $opt_num) Update existing installation to latest version"
+    ((opt_num++))
+
     options+=("standalone")
     echo "  $opt_num) Create new standalone Docker setup"
     ((opt_num++))
@@ -504,6 +510,27 @@ show_menu() {
                 ;;
             "npm-local")
                 install_npm_global
+                ;;
+            "update")
+                print_step "Updating $PACKAGE_NAME to latest version..."
+                if detect_running_n8n_container; then
+                    print_info "Updating in container: $N8N_CONTAINER"
+                    docker exec "$N8N_CONTAINER" sh -c "
+                        cd /home/node/.n8n/nodes 2>/dev/null || exit 1
+                        npm update $PACKAGE_NAME
+                    "
+                    print_success "Package updated!"
+                    if confirm "Restart container to apply update?"; then
+                        docker restart "$N8N_CONTAINER"
+                        print_success "Container restarted"
+                    fi
+                elif detect_n8n_data_dir; then
+                    print_info "Updating in: $N8N_DATA_DIR/nodes"
+                    cd "$N8N_DATA_DIR/nodes" && npm update "$PACKAGE_NAME"
+                    print_success "Package updated! Restart n8n to apply."
+                else
+                    print_error "No n8n installation found to update"
+                fi
                 ;;
             "standalone")
                 read -p "Target directory [.]: " target_dir
@@ -541,6 +568,9 @@ main() {
         echo "  --docker        Install with Docker persistence (auto-detect compose)"
         echo "  --direct        Install into running container"
         echo "  --npm           Install via npm to ~/.n8n/nodes"
+        echo "  --update        Update to latest version (works with --direct, --npm)"
+        echo ""
+        echo "The init script auto-checks for updates on each container start."
         echo ""
         exit 0
     fi
@@ -571,6 +601,29 @@ main() {
             ;;
         "--npm")
             install_npm_global
+            exit 0
+            ;;
+        "--update")
+            print_step "Updating $PACKAGE_NAME to latest version..."
+            if detect_running_n8n_container; then
+                print_info "Updating in container: $N8N_CONTAINER"
+                docker exec "$N8N_CONTAINER" sh -c "
+                    cd /home/node/.n8n/nodes 2>/dev/null || exit 1
+                    npm update $PACKAGE_NAME
+                "
+                print_success "Package updated!"
+                if confirm "Restart container to apply update?"; then
+                    docker restart "$N8N_CONTAINER"
+                    print_success "Container restarted"
+                fi
+            elif detect_n8n_data_dir; then
+                print_info "Updating in: $N8N_DATA_DIR/nodes"
+                cd "$N8N_DATA_DIR/nodes" && npm update "$PACKAGE_NAME"
+                print_success "Package updated! Restart n8n to apply."
+            else
+                print_error "No n8n installation found to update"
+                exit 1
+            fi
             exit 0
             ;;
     esac
