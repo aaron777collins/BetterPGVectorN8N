@@ -1,0 +1,22 @@
+title: n8n-nodes-pgvector-advanced
+description: Advanced PGVector nodes for n8n with full CRUD control
+theme: jekyll-theme-cayman
+baseurl: "/BetterPGVectorN8N"
+url: "https://aaron777collins.github.io"
+
+# Navigation
+header_pages:
+  - index.md
+  - installation.md
+  - quick-start.md
+  - operations.md
+  - docker.md
+  - api-reference.md
+  - troubleshooting.md
+
+markdown: kramdown
+highlighter: rouge
+
+# SEO
+plugins:
+  - jekyll-seo-tag

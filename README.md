@@ -2,6 +2,10 @@
 
 Advanced PGVector nodes for n8n with full CRUD control. No more limitations of the built-in node.
 
+**[View Full Documentation](https://aaron777collins.github.io/BetterPGVectorN8N/)** | [Installation](https://aaron777collins.github.io/BetterPGVectorN8N/installation) | [Quick Start](https://aaron777collins.github.io/BetterPGVectorN8N/quick-start) | [Docker Guide](https://aaron777collins.github.io/BetterPGVectorN8N/docker)
+
+---
+
 ## Install in 30 Seconds
 
 ```bash
@@ -237,6 +241,19 @@ npm test
 
 ---
 
+## Documentation
+
+| Guide | Description |
+|-------|-------------|
+| [Installation](https://aaron777collins.github.io/BetterPGVectorN8N/installation) | All installation methods |
+| [Quick Start](https://aaron777collins.github.io/BetterPGVectorN8N/quick-start) | Get running in 5 minutes |
+| [Operations](https://aaron777collins.github.io/BetterPGVectorN8N/operations) | Full operations reference |
+| [Docker Guide](https://aaron777collins.github.io/BetterPGVectorN8N/docker) | Persistent Docker setup |
+| [API Reference](https://aaron777collins.github.io/BetterPGVectorN8N/api-reference) | Schema & TypeScript API |
+| [Troubleshooting](https://aaron777collins.github.io/BetterPGVectorN8N/troubleshooting) | Common issues & fixes |
+
+---
+
 ## License
 
 MIT
@@ -244,3 +261,5 @@ MIT
 ---
 
 **Made with ❤️ for the n8n community**
+
+[View on GitHub](https://github.com/aaron777collins/BetterPGVectorN8N) | [npm](https://www.npmjs.com/package/n8n-nodes-pgvector-advanced) | [Full Docs](https://aaron777collins.github.io/BetterPGVectorN8N/)
