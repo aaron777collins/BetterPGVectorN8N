@@ -453,6 +453,62 @@ export class PgVectorStoreTool implements INodeType {
           rows: 3,
         },
       },
+      // AI Parameters notices - show what the AI will provide
+      {
+        displayName: 'The AI will provide: <strong>query</strong> (required) - what to search for, <strong>filter</strong> (optional) - metadata filter like {category: "meeting"}',
+        name: 'recallParamsNotice',
+        type: 'notice',
+        default: '',
+        displayOptions: {
+          show: {
+            operation: ['recall'],
+          },
+        },
+      },
+      {
+        displayName: 'The AI will provide: <strong>content</strong> (required) - text to store, <strong>id</strong> (optional) - entry ID, <strong>updateSimilar</strong> (optional) - find & update similar entry, <strong>metadata</strong> (optional) - tags',
+        name: 'rememberParamsNotice',
+        type: 'notice',
+        default: '',
+        displayOptions: {
+          show: {
+            operation: ['remember'],
+          },
+        },
+      },
+      {
+        displayName: 'The AI will provide: <strong>id</strong> (required) - the exact ID to delete',
+        name: 'forgetParamsNotice',
+        type: 'notice',
+        default: '',
+        displayOptions: {
+          show: {
+            operation: ['forget'],
+          },
+        },
+      },
+      {
+        displayName: 'The AI will provide: <strong>concept</strong> (required) - delete entries similar to this concept',
+        name: 'forgetSimilarParamsNotice',
+        type: 'notice',
+        default: '',
+        displayOptions: {
+          show: {
+            operation: ['forgetSimilar'],
+          },
+        },
+      },
+      {
+        displayName: 'The AI will provide: <strong>id</strong> (required) - the ID to retrieve',
+        name: 'lookupParamsNotice',
+        type: 'notice',
+        default: '',
+        displayOptions: {
+          show: {
+            operation: ['lookup'],
+          },
+        },
+      },
       // Recall-specific options
       {
         displayName: 'Top K Results',
