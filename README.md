@@ -47,6 +47,64 @@ npm link
 npm link n8n-nodes-pgvector-advanced
 ```
 
+### Docker Installation (Persistent)
+
+For Docker deployments, community nodes need special handling to persist across container rebuilds. See [`examples/docker/`](examples/docker/) for a complete setup.
+
+**Quick start:**
+
+```bash
+cd examples/docker
+docker compose up -d
+```
+
+**How it works:**
+
+The setup uses a custom Dockerfile that runs an init script on startup to auto-install community nodes:
+
+```dockerfile
+FROM docker.n8n.io/n8nio/n8n:latest
+
+USER root
+COPY init-nodes.sh /init-nodes.sh
+RUN chmod 755 /init-nodes.sh && chown node:node /init-nodes.sh
+
+USER node
+ENTRYPOINT ["/bin/sh", "-c", "/init-nodes.sh && exec n8n \"$@\"", "--"]
+```
+
+The `init-nodes.sh` script installs packages to the persistent volume on each startup:
+
+```sh
+#!/bin/sh
+PACKAGES="n8n-nodes-pgvector-advanced"
+NODES_DIR="/home/node/.n8n/nodes"
+
+mkdir -p "$NODES_DIR"
+cd "$NODES_DIR"
+
+if [ ! -f "package.json" ]; then
+    npm init -y > /dev/null 2>&1
+fi
+
+for pkg in $PACKAGES; do
+    if [ ! -d "node_modules/$pkg" ]; then
+        echo "Installing community node: $pkg"
+        npm install "$pkg" --save
+    fi
+done
+```
+
+**Adding more community nodes:**
+
+Edit `init-nodes.sh` and add packages to the `PACKAGES` variable:
+
+```sh
+PACKAGES="n8n-nodes-pgvector-advanced another-package third-package"
+```
+
+Then rebuild: `docker compose build && docker compose up -d`
+
 ## Prerequisites
 
 - PostgreSQL 12+ with pgvector extension installed
