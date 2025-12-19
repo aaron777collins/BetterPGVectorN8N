@@ -38,8 +38,12 @@ describe('PgvectorVectorStore E2E Tests', () => {
 
     // Ensure pgvector extension is installed
     await dbManager.query('CREATE EXTENSION IF NOT EXISTS vector', []);
+    await dbManager.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"', []);
 
-    // Create embeddings table if it doesn't exist
+    // Drop and recreate table to ensure correct dimensions
+    await dbManager.query('DROP TABLE IF EXISTS embeddings CASCADE', []);
+
+    // Create embeddings table
     await dbManager.query(
       `CREATE TABLE IF NOT EXISTS embeddings (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -69,10 +73,15 @@ describe('PgvectorVectorStore E2E Tests', () => {
 
   beforeEach(async () => {
     // Clean up all test data before each test
-    await dbManager.query(
-      `DELETE FROM embeddings WHERE collection LIKE 'test_%' OR collection = 'default'`,
-      [],
-    );
+    // Use try-catch to handle case where table might not exist yet
+    try {
+      await dbManager.query(
+        `DELETE FROM embeddings WHERE collection LIKE 'test_%' OR collection = 'default'`,
+        [],
+      );
+    } catch {
+      // Table might not exist yet, which is fine - beforeAll will create it
+    }
   });
 
   describe('Admin Operations', () => {
@@ -205,8 +214,8 @@ describe('PgvectorVectorStore E2E Tests', () => {
         collection: testCollections.default,
         externalId: 'doc-1',
         content: 'Test document',
-        metadata: { category: 'test' },
-        embedding: sampleEmbedding1536,
+        metadata: JSON.stringify({ category: 'test' }),
+        embedding: JSON.stringify(sampleEmbedding1536),
       };
 
       const mockContext = createMockExecuteFunctions(params);
@@ -221,7 +230,7 @@ describe('PgvectorVectorStore E2E Tests', () => {
       const params = {
         ...mockParameters.upsertSingle,
         collection: testCollections.default,
-        embedding: sampleEmbedding1536,
+        embedding: JSON.stringify(sampleEmbedding1536),
       };
 
       const mockContext = createMockExecuteFunctions(params);
@@ -240,8 +249,8 @@ describe('PgvectorVectorStore E2E Tests', () => {
         collection: testCollections.default,
         externalId,
         content: 'Version 1',
-        metadata: { version: 1 },
-        embedding: sampleEmbedding1536,
+        metadata: JSON.stringify({ version: 1 }),
+        embedding: JSON.stringify(sampleEmbedding1536),
       };
 
       const context1 = createMockExecuteFunctions(params1);
@@ -253,8 +262,8 @@ describe('PgvectorVectorStore E2E Tests', () => {
         collection: testCollections.default,
         externalId,
         content: 'Version 2',
-        metadata: { version: 2 },
-        embedding: sampleEmbedding1536_2,
+        metadata: JSON.stringify({ version: 2 }),
+        embedding: JSON.stringify(sampleEmbedding1536_2),
       };
 
       const context2 = createMockExecuteFunctions(params2);
@@ -344,7 +353,7 @@ describe('PgvectorVectorStore E2E Tests', () => {
       const params = {
         ...mockParameters.query,
         collection: testCollections.documents,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
         topK: 5,
       };
 
@@ -361,7 +370,7 @@ describe('PgvectorVectorStore E2E Tests', () => {
       const params = {
         ...mockParameters.query,
         collection: testCollections.documents,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
         topK: 10,
         metadataFilter: { category: 'tech' },
       };
@@ -380,7 +389,7 @@ describe('PgvectorVectorStore E2E Tests', () => {
       const params = {
         ...mockParameters.query,
         collection: testCollections.documents,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
         topK: 2,
         offset: 1,
       };
@@ -399,7 +408,7 @@ describe('PgvectorVectorStore E2E Tests', () => {
         const params = {
           ...mockParameters.query,
           collection: testCollections.documents,
-          queryEmbedding: sampleEmbedding1536,
+          queryEmbedding: JSON.stringify(sampleEmbedding1536),
           topK: 5,
           distanceMetric: metric,
         };
@@ -416,7 +425,7 @@ describe('PgvectorVectorStore E2E Tests', () => {
       const params = {
         ...mockParameters.query,
         collection: testCollections.documents,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
         topK: 1,
         includeEmbedding: true,
       };
@@ -433,7 +442,7 @@ describe('PgvectorVectorStore E2E Tests', () => {
       const params = {
         ...mockParameters.query,
         collection: testCollections.documents,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
         topK: 1,
         includeEmbedding: false,
       };
@@ -449,7 +458,7 @@ describe('PgvectorVectorStore E2E Tests', () => {
       const params = {
         ...mockParameters.query,
         collection: 'empty_collection',
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
         topK: 10,
       };
 
@@ -733,8 +742,8 @@ describe('PgvectorVectorStore E2E Tests', () => {
         collection: testCollections.documents,
         externalId: 'pipeline-doc-1',
         content: 'AI and machine learning tutorial',
-        metadata: { type: 'tutorial' },
-        embedding: sampleEmbedding1536,
+        metadata: JSON.stringify({ type: 'tutorial' }),
+        embedding: JSON.stringify(sampleEmbedding1536),
       };
 
       const upsertContext = createMockExecuteFunctions(upsertParams);
@@ -744,7 +753,7 @@ describe('PgvectorVectorStore E2E Tests', () => {
       const queryParams = {
         ...mockParameters.query,
         collection: testCollections.documents,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
         topK: 5,
       };
 
@@ -765,8 +774,8 @@ describe('PgvectorVectorStore E2E Tests', () => {
         collection: testCollections.default,
         externalId,
         content: 'Version 1',
-        metadata: { version: 1 },
-        embedding: sampleEmbedding1536,
+        metadata: JSON.stringify({ version: 1 }),
+        embedding: JSON.stringify(sampleEmbedding1536),
       };
 
       const context1 = createMockExecuteFunctions(params1);
@@ -778,8 +787,8 @@ describe('PgvectorVectorStore E2E Tests', () => {
         collection: testCollections.default,
         externalId,
         content: 'Version 2',
-        metadata: { version: 2 },
-        embedding: sampleEmbedding1536_2,
+        metadata: JSON.stringify({ version: 2 }),
+        embedding: JSON.stringify(sampleEmbedding1536_2),
       };
 
       const context2 = createMockExecuteFunctions(params2);
@@ -809,8 +818,8 @@ describe('PgvectorVectorStore E2E Tests', () => {
         collection: testCollections.documents,
         externalId: 'original-doc',
         content: 'Original content',
-        metadata: {},
-        embedding: sampleEmbedding1536,
+        metadata: JSON.stringify({}),
+        embedding: JSON.stringify(sampleEmbedding1536),
       };
 
       const originalContext = createMockExecuteFunctions(originalParams);
@@ -820,7 +829,7 @@ describe('PgvectorVectorStore E2E Tests', () => {
       const queryParams = {
         ...mockParameters.query,
         collection: testCollections.documents,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
         topK: 1,
       };
 
@@ -850,7 +859,7 @@ describe('PgvectorVectorStore E2E Tests', () => {
       const queryParams = {
         ...mockParameters.query,
         collection: testCollections.default,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
         topK: 10,
       };
 
@@ -882,7 +891,7 @@ describe('PgvectorVectorStore E2E Tests', () => {
       const params = {
         ...mockParameters.query,
         collection: testCollections.documents,
-        queryEmbedding: sampleEmbedding1536,
+        queryEmbedding: JSON.stringify(sampleEmbedding1536),
         topK: 10,
       };
 

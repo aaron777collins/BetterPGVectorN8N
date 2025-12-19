@@ -150,13 +150,15 @@ export const testCollections = {
 
 /**
  * Database configuration for tests
+ * Uses same env vars as setup.ts and docker-compose.yml for consistency
+ * Default port is 5433 for local docker-compose, CI overrides to 5432
  */
 export const testDbConfig = {
-  host: process.env.POSTGRES_HOST || 'localhost',
-  port: parseInt(process.env.POSTGRES_PORT || '5432'),
-  database: process.env.POSTGRES_DB || 'test_pgvector',
-  user: process.env.POSTGRES_USER || 'postgres',
-  password: process.env.POSTGRES_PASSWORD || 'postgres',
+  host: process.env.PGHOST || 'localhost',
+  port: parseInt(process.env.PGPORT || '5433'),
+  database: process.env.PGDATABASE || 'testdb',
+  user: process.env.PGUSER || 'testuser',
+  password: process.env.PGPASSWORD || 'testpass',
   max: 10, // connection pool size
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 10000,

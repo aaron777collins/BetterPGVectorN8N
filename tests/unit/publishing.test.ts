@@ -1,6 +1,9 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as yaml from 'js-yaml';
+
+// Use require for js-yaml to avoid TS declaration issues
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const yaml = require('js-yaml');
 
 describe('Publishing Configuration', () => {
   const rootDir = path.resolve(__dirname, '../..');
@@ -14,7 +17,7 @@ describe('Publishing Configuration', () => {
       expect(packageJson.version).toBeDefined();
       expect(packageJson.description).toBeDefined();
       expect(packageJson.license).toBeDefined();
-      expect(packageJson.main).toBeDefined();
+      // main field is optional for n8n nodes (discovery via n8n.nodes)
     });
 
     it('should have valid semver version', () => {
@@ -163,14 +166,18 @@ describe('Publishing Configuration', () => {
       expect(packageJson.scripts.build).toBeDefined();
     });
 
-    it('main entry point should be in dist', () => {
-      expect(packageJson.main).toMatch(/^dist\//);
-    });
-
     it('n8n node files should be in dist', () => {
       packageJson.n8n.nodes.forEach((nodePath: string) => {
         expect(nodePath).toMatch(/^dist\//);
       });
+    });
+
+    it('n8n credential files should be in dist', () => {
+      if (packageJson.n8n.credentials) {
+        packageJson.n8n.credentials.forEach((credPath: string) => {
+          expect(credPath).toMatch(/^dist\//);
+        });
+      }
     });
   });
 

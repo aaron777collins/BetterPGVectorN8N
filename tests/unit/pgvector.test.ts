@@ -146,7 +146,7 @@ describe('PgVectorManager - Unit Tests', () => {
 
       expect(createIndexCall).toBeDefined();
       expect(createIndexCall[0]).toContain('USING hnsw');
-      expect(createIndexCall[0]).toContain('<=>');  // cosine distance operator
+      expect(createIndexCall[0]).toContain('vector_cosine_ops');  // cosine distance operator class
       expect(createIndexCall[0]).toContain("collection = 'test_collection'");
     });
 
@@ -158,7 +158,7 @@ describe('PgVectorManager - Unit Tests', () => {
       );
 
       expect(createIndexCall[0]).toContain('USING hnsw');
-      expect(createIndexCall[0]).toContain('<=>');  // cosine distance operator
+      expect(createIndexCall[0]).toContain('vector_cosine_ops');  // cosine distance operator class
     });
 
     it('should create HNSW index with L2 distance', async () => {
@@ -169,7 +169,7 @@ describe('PgVectorManager - Unit Tests', () => {
       );
 
       expect(createIndexCall[0]).toContain('USING hnsw');
-      expect(createIndexCall[0]).toContain('<->');  // L2 distance operator
+      expect(createIndexCall[0]).toContain('vector_l2_ops');  // L2 distance operator class
     });
 
     it('should create HNSW index with inner product distance', async () => {
@@ -180,7 +180,7 @@ describe('PgVectorManager - Unit Tests', () => {
       );
 
       expect(createIndexCall[0]).toContain('USING hnsw');
-      expect(createIndexCall[0]).toContain('<#>');  // inner product operator
+      expect(createIndexCall[0]).toContain('vector_ip_ops');  // inner product operator class
     });
 
     it('should create IVFFlat index', async () => {
@@ -318,6 +318,27 @@ describe('PgVectorManager - Unit Tests', () => {
 
     it('should throw error for unknown metric', () => {
       expect(() => pgVector.getDistanceOperator('invalid' as any)).toThrow('Unknown distance metric');
+    });
+  });
+
+  describe('getOperatorClass()', () => {
+    it('should return vector_cosine_ops for cosine distance', () => {
+      const opClass = pgVector.getOperatorClass(DistanceMetric.COSINE);
+      expect(opClass).toBe('vector_cosine_ops');
+    });
+
+    it('should return vector_l2_ops for L2 distance', () => {
+      const opClass = pgVector.getOperatorClass(DistanceMetric.L2);
+      expect(opClass).toBe('vector_l2_ops');
+    });
+
+    it('should return vector_ip_ops for inner product', () => {
+      const opClass = pgVector.getOperatorClass(DistanceMetric.INNER_PRODUCT);
+      expect(opClass).toBe('vector_ip_ops');
+    });
+
+    it('should throw error for unknown metric', () => {
+      expect(() => pgVector.getOperatorClass('invalid' as any)).toThrow('Unknown distance metric');
     });
   });
 

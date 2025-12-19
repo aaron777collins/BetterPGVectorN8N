@@ -12,7 +12,7 @@ describe('PgVectorManager Integration Tests', () => {
   beforeAll(async () => {
     db = new DatabaseManager({
       host: process.env.PGHOST || 'localhost',
-      port: parseInt(process.env.PGPORT || '5432'),
+      port: parseInt(process.env.PGPORT || '5433'),
       user: process.env.PGUSER || 'testuser',
       password: process.env.PGPASSWORD || 'testpass',
       database: process.env.PGDATABASE || 'testdb',

@@ -131,7 +131,7 @@ export class PgVectorManager {
       return;
     }
 
-    const distanceOp = this.getDistanceOperator(distanceMetric);
+    const opClass = this.getOperatorClass(distanceMetric);
 
     let indexSQL: string;
     if (indexType === IndexType.HNSW) {
@@ -139,7 +139,7 @@ export class PgVectorManager {
       indexSQL = `
         CREATE INDEX ${indexName}
         ON ${tableName}
-        USING hnsw (embedding ${distanceOp})
+        USING hnsw (embedding ${opClass})
         WHERE collection = '${collection}'
       `;
     } else {
@@ -147,7 +147,7 @@ export class PgVectorManager {
       indexSQL = `
         CREATE INDEX ${indexName}
         ON ${tableName}
-        USING ivfflat (embedding ${distanceOp})
+        USING ivfflat (embedding ${opClass})
         WITH (lists = 100)
         WHERE collection = '${collection}'
       `;
@@ -196,7 +196,7 @@ export class PgVectorManager {
   }
 
   /**
-   * Get distance operator for a metric
+   * Get distance operator for a metric (used in queries)
    */
   getDistanceOperator(metric: DistanceMetric): string {
     switch (metric) {
@@ -206,6 +206,22 @@ export class PgVectorManager {
         return '<->';
       case DistanceMetric.INNER_PRODUCT:
         return '<#>';
+      default:
+        throw new Error(`Unknown distance metric: ${metric}`);
+    }
+  }
+
+  /**
+   * Get operator class for a metric (used in index creation)
+   */
+  getOperatorClass(metric: DistanceMetric): string {
+    switch (metric) {
+      case DistanceMetric.COSINE:
+        return 'vector_cosine_ops';
+      case DistanceMetric.L2:
+        return 'vector_l2_ops';
+      case DistanceMetric.INNER_PRODUCT:
+        return 'vector_ip_ops';
       default:
         throw new Error(`Unknown distance metric: ${metric}`);
     }

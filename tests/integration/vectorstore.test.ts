@@ -13,13 +13,13 @@ describe('VectorStore Operations Integration Tests', () => {
   let pgVector: PgVectorManager;
   let vectorStore: VectorStoreOperations;
 
-  const DIMENSIONS = 384;
+  const DIMENSIONS = 1536;
   const TEST_COLLECTION = 'test_collection';
 
   beforeAll(async () => {
     db = new DatabaseManager({
       host: process.env.PGHOST || 'localhost',
-      port: parseInt(process.env.PGPORT || '5432'),
+      port: parseInt(process.env.PGPORT || '5433'),
       user: process.env.PGUSER || 'testuser',
       password: process.env.PGPASSWORD || 'testpass',
       database: process.env.PGDATABASE || 'testdb',
@@ -28,8 +28,9 @@ describe('VectorStore Operations Integration Tests', () => {
     pgVector = new PgVectorManager(db);
     vectorStore = new VectorStoreOperations(db, pgVector);
 
-    // Setup schema
+    // Setup schema - drop and recreate to ensure correct dimensions
     await pgVector.ensureExtension();
+    await db.query('DROP TABLE IF EXISTS embeddings CASCADE', []);
     await pgVector.ensureTable(DIMENSIONS);
     await pgVector.ensureMetadataIndex();
   });
