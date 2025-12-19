@@ -258,9 +258,42 @@ npm test
 
 ---
 
-## MCP Server for AI Agents
+## AI Agent Tool
 
-This package includes an MCP (Model Context Protocol) server for AI agents like Claude.
+The **PGVector Store Tool** lets n8n AI Agents manage knowledge with natural operations:
+
+| Operation | What it does |
+|-----------|--------------|
+| **Remember** | Store new info, update by ID or similar concept |
+| **Recall** | Search with similarity threshold |
+| **Forget** | Delete by exact ID |
+| **Forget Similar** | Delete by concept (with dry-run safety) |
+| **Lookup** | Get by exact ID |
+
+### Configuration
+
+Each operation has n8n settings (safety/behavior) and AI parameters (data):
+
+| n8n Config | AI Provides |
+|------------|-------------|
+| Collection, thresholds, ID hints | Content, IDs, queries |
+| Dry run mode, result limits | Metadata filters |
+
+**Example - Remember operation:**
+- n8n: `ID Format Hint = "meeting-YYYY-MM-DD"`, `Auto-Generate ID = ON`
+- AI: `content`, `id` (optional), `metadata`
+
+**Example - Forget Similar operation:**
+- n8n: `Similarity Threshold = 0.8`, `Dry Run = ON`
+- AI: `concept` (what to delete)
+
+[Full AI Tools Documentation →](https://aaron777collins.github.io/BetterPGVectorN8N/ai-tools)
+
+---
+
+## MCP Server for External AI Agents
+
+Use with Claude, GPT, or other AI agents outside n8n.
 
 ```bash
 # Run directly
@@ -274,6 +307,8 @@ pgvector-mcp
 **Available tools:** `pgvector_upsert`, `pgvector_query`, `pgvector_delete`, `pgvector_get`, `pgvector_admin`
 
 Set environment variables: `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`
+
+[Full MCP Documentation →](https://aaron777collins.github.io/BetterPGVectorN8N/mcp)
 
 ---
 
