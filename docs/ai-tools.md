@@ -6,7 +6,7 @@ nav_order: 6
 
 # AI Agent Tools for n8n
 
-This package includes an **AI Agent Tool** node that allows n8n's AI Agents to interact with your vector store using intuitive, human-like operations.
+This package includes an **AI Agent Tool** node that allows n8n's AI Agents to interact with your vector store using intuitive operations.
 
 ---
 
@@ -14,12 +14,13 @@ This package includes an **AI Agent Tool** node that allows n8n's AI Agents to i
 
 The **PGVector Store Tool** provides AI Agents with a natural way to manage knowledge:
 
-- **Remember** - Store new information (with optional ID for updates)
-- **Recall** - Search for similar information using natural language
-- **Forget** - Delete by exact ID or by concept similarity
-- **Lookup** - Get a specific entry by ID
-
-This enables powerful RAG (Retrieval-Augmented Generation) workflows where AI agents can dynamically manage your knowledge base.
+| Operation | What it does |
+|-----------|--------------|
+| **Remember** | Store new information, or update by ID or by finding similar content |
+| **Recall** | Search for similar information with configurable threshold |
+| **Forget** | Delete a specific entry by its exact ID |
+| **Forget Similar** | Delete entries similar to a concept (with safety controls) |
+| **Lookup** | Get a specific entry by ID |
 
 ---
 
@@ -40,208 +41,199 @@ This enables powerful RAG (Retrieval-Augmented Generation) workflows where AI ag
 ### 3. Configure the Tool
 
 1. Set up your **Postgres credentials**
-2. Choose the **Operation** (Recall, Remember, Forget, or Lookup)
-3. Specify your **Collection** name (default: "knowledge")
-4. Optionally customize the **Tool Description**
-
-### 4. Run Your Agent
-
-The AI Agent will now be able to use your vector store based on the conversation context!
+2. Choose the **Operation**
+3. Configure operation-specific settings
+4. Specify your **Collection** name
 
 ---
 
 ## Operations
 
-### Remember (Store Information)
+### Remember (Store/Update)
 
 Store new information or update existing entries.
 
+**n8n Configuration:**
+| Setting | Description |
+|---------|-------------|
+| Collection | Knowledge base name |
+| Distance Metric | For concept-based updates |
+| Update Similarity Threshold | Min similarity to allow concept-based update (default: 0.7) |
+
+**AI provides:**
 | Parameter | Description |
 |-----------|-------------|
-| content | The information/text to remember |
-| id | Optional ID for this memory (use to update existing entries) |
-| metadata | Optional tags like `{category: "meeting", date: "2024-01"}` |
+| content | The information to store (required) |
+| id | Update entry with this ID |
+| updateSimilar | Find and update entry similar to this concept |
+| metadata | Tags like `{category: "meeting"}` |
 
 **Example AI interactions:**
-> "Remember that our next team meeting is on Friday at 2pm"
 
-> "Save this with ID 'meeting-schedule': Team meetings are every Friday"
+Create new:
+> "Remember that the API key expires on January 15th"
 
-> "Update the entry with ID 'api-docs' with the new endpoint information"
+Update by ID:
+> "Update entry 'api-info' with the new expiration date"
 
-The tool generates an embedding and stores the content. If an ID is provided and already exists, it updates the entry.
+Update by concept:
+> "Update the information about API keys with this new content: ..."
 
 ### Recall (Search)
 
-Search for information using natural language.
+Search for similar information.
 
-| Parameter | Description |
-|-----------|-------------|
-| query | What to search for (natural language) |
-| filter | Optional metadata filter like `{category: "meeting"}` |
-| Top K | Number of results to return (default: 5) |
+**n8n Configuration:**
+| Setting | Description |
+|---------|-------------|
+| Collection | Knowledge base name |
+| Top K Results | Maximum results to return (default: 5) |
+| Minimum Similarity | Only return results above this threshold (0-1, default: 0) |
 | Distance Metric | cosine, l2, or inner_product |
 
-**Example AI interactions:**
-> "What do we know about upcoming meetings?"
-
-> "Find all information tagged with category 'technical'"
-
-> "Recall anything related to API authentication"
-
-Results include relevance scores and any stored metadata.
-
-### Forget (Delete)
-
-Remove information by exact ID or by concept similarity.
-
+**AI provides:**
 | Parameter | Description |
 |-----------|-------------|
-| id | Exact ID of the entry to delete |
-| concept | Delete entries similar to this concept/text |
-| threshold | Similarity threshold for concept deletion (0-1, default 0.8) |
-| dryRun | If true, shows what would be deleted without actually deleting |
+| query | What to search for (required) |
+| filter | Metadata filter like `{category: "meeting"}` |
 
 **Example AI interactions:**
+> "What do we know about the API?"
 
-By ID:
-> "Forget the entry with ID 'old-meeting-notes'"
+> "Find all meeting notes from Q1"
 
-By concept:
-> "Forget everything related to the deprecated API"
+### Forget (Delete by ID)
 
-With dry run:
-> "Show me what would be deleted if I forget all information about Q1 planning"
+Delete a specific entry by its exact ID.
 
-The concept-based deletion is powerful for cleaning up related information. Use `dryRun` to preview what would be deleted.
+**n8n Configuration:**
+| Setting | Description |
+|---------|-------------|
+| Collection | Knowledge base name |
+
+**AI provides:**
+| Parameter | Description |
+|-----------|-------------|
+| id | The exact ID to delete (required) |
+
+**Example AI interactions:**
+> "Delete the entry with ID 'old-notes-123'"
+
+### Forget Similar (Delete by Concept)
+
+Delete entries similar to a concept. Has safety controls.
+
+**n8n Configuration:**
+| Setting | Description |
+|---------|-------------|
+| Collection | Knowledge base name |
+| Distance Metric | For similarity matching |
+| Similarity Threshold | Only delete if similarity above this (default: 0.8) |
+| Dry Run | Show what would be deleted without deleting (default: ON) |
+
+**AI provides:**
+| Parameter | Description |
+|-----------|-------------|
+| concept | Delete entries similar to this (required) |
+
+**Example AI interactions:**
+> "Delete all information about the deprecated API"
+
+With Dry Run ON, the tool shows what would be deleted. Set Dry Run OFF to actually delete.
 
 ### Lookup (Get by ID)
 
 Retrieve a specific entry by its exact ID.
 
+**n8n Configuration:**
+| Setting | Description |
+|---------|-------------|
+| Collection | Knowledge base name |
+
+**AI provides:**
 | Parameter | Description |
 |-----------|-------------|
-| id | The ID of the entry to retrieve |
+| id | The ID to retrieve (required) |
 
 **Example AI interactions:**
-> "Show me the entry with ID 'meeting-notes-2024'"
-
-> "Look up the document with ID 'api-v2-spec'"
+> "Show me the entry with ID 'meeting-notes-jan'"
 
 ---
 
 ## Tool Naming
 
-Tools are automatically named based on the collection:
+Tools are automatically named based on collection:
 - `remember_knowledge`
 - `recall_knowledge`
 - `forget_knowledge`
+- `forget_similar_knowledge`
 - `lookup_knowledge`
 
-For a collection named "docs":
-- `remember_docs`
-- `recall_docs`
-- `forget_docs`
-- `lookup_docs`
+---
+
+## Configuration vs AI Parameters
+
+The design philosophy is:
+- **n8n Configuration**: Safety settings, thresholds, limits
+- **AI Parameters**: The actual data and targets
+
+This means users control safety (thresholds, dry run) while the AI handles the content.
 
 ---
 
 ## Example Workflows
 
-### RAG Chatbot with Memory
-
-```
-Chat Trigger → AI Agent → OpenAI Chat Model
-                    ↓
-              PGVector Store Tool (Recall) → OpenAI Embeddings
-```
-
-The agent searches your knowledge base to answer questions.
-
-### Learning Assistant
+### Knowledge Base with Full CRUD
 
 ```
 Chat Trigger → AI Agent → OpenAI Chat Model
                     ↓
               PGVector Store Tool (Remember) → OpenAI Embeddings
               PGVector Store Tool (Recall) → OpenAI Embeddings
+              PGVector Store Tool (Forget) → OpenAI Embeddings
+              PGVector Store Tool (Lookup) → OpenAI Embeddings
 ```
 
-The agent can both learn new information and recall it later.
-
-### Knowledge Base Manager
+### Safe Cleanup Workflow
 
 ```
 Chat Trigger → AI Agent → OpenAI Chat Model
                     ↓
-              PGVector Store Tool (All Operations) → OpenAI Embeddings
+              PGVector Store Tool (Forget Similar, Dry Run ON)
 ```
 
-The agent can remember, recall, forget, and lookup based on conversation.
-
----
-
-## Multiple Tools / Collections
-
-You can add **multiple PGVector Store Tool nodes** to give your agent access to different collections:
-
-```
-AI Agent
-    ├── PGVector Store Tool (Recall - meetings)
-    ├── PGVector Store Tool (Recall - documents)
-    ├── PGVector Store Tool (Remember - notes)
-    └── PGVector Store Tool (Forget - notes)
-```
-
-Each tool will have a distinct name like `recall_meetings`, `recall_documents`, etc.
+First run with Dry Run to see what would be deleted, then create another workflow with Dry Run OFF for actual deletion.
 
 ---
 
 ## Best Practices
 
-### 1. Clear Tool Descriptions
+### 1. Use IDs for Important Entries
 
-Write specific descriptions so the AI knows exactly when to use each tool:
-
+When storing information you'll want to update later:
 ```
-Bad: "Search documents"
-Good: "Search the customer support knowledge base for answers to technical questions about our software products"
+AI: "Remember this with ID 'weekly-schedule': Team meetings are Fridays at 2pm"
 ```
 
-### 2. Use IDs for Important Entries
+### 2. Use Concept Updates Carefully
 
-Provide IDs when storing information you'll want to update or delete later:
+The updateSimilar feature is powerful but should have a reasonable threshold:
+- 0.8+ for strict matching
+- 0.7 for moderate matching
+- Below 0.6 may match unintended entries
 
-```json
-{
-  "id": "team-schedule-2024",
-  "content": "Team meetings are on Fridays at 2pm"
-}
-```
+### 3. Always Dry Run First
 
-### 3. Leverage Concept-Based Forget
+When using Forget Similar, always test with Dry Run ON to see what would be deleted.
 
-When cleaning up related information, use the concept-based forget with a dry run first:
-
-```
-"Show me what would be deleted if I forget all Q1 meeting notes"
-```
-
-Then without dry run:
-```
-"Forget all Q1 meeting notes"
-```
-
-### 4. Metadata for Organization
-
-Add metadata to enable filtered searches:
+### 4. Organize with Metadata
 
 ```json
 {
   "metadata": {
     "category": "meeting",
     "quarter": "Q1",
-    "year": "2024"
+    "project": "alpha"
   }
 }
 ```
@@ -250,32 +242,24 @@ Add metadata to enable filtered searches:
 
 ## Troubleshooting
 
-### "An embeddings model must be connected"
+### "No existing entry found similar to..."
 
-Make sure you've connected an **Embeddings** node (like OpenAI Embeddings) to the tool.
+When using updateSimilar, no entry was found that matches. Store as new instead.
 
-### Agent not using the tool
+### "Similarity below threshold"
 
-- Check the tool description is clear and specific
-- Ensure the AI model supports function calling
-- Try prompting the agent more explicitly
+The found entry isn't similar enough to the search concept. Either:
+- Use the provided ID to force update
+- Lower the Update Similarity Threshold in n8n config
 
-### Connection errors
+### "Dry run - would delete X entries"
 
-- Verify Postgres credentials are correct
-- Ensure pgvector extension is installed
-- Check database is accessible from n8n
-
-### Concept-based forget not working as expected
-
-- Try adjusting the threshold (higher = stricter matching)
-- Use dry run to preview what will be deleted
-- Check that the concept text is similar enough to stored content
+This is expected! Disable Dry Run in n8n config to actually delete.
 
 ---
 
 ## See Also
 
-- [Installation Guide](installation.md) - Set up the package
-- [Operations Reference](operations.md) - Detailed operation docs
-- [MCP Server](mcp.md) - Use with external AI agents (Claude, etc.)
+- [Installation Guide](installation.md)
+- [Operations Reference](operations.md)
+- [MCP Server](mcp.md) - Use with external AI agents
