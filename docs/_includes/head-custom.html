@@ -1,4 +1,107 @@
 <style>
+/* Navigation bar */
+.docs-nav {
+  background: #1b1f23;
+  padding: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  border-bottom: 1px solid #30363d;
+}
+
+.docs-nav-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+}
+
+.docs-nav-brand {
+  color: #58a6ff;
+  font-weight: 600;
+  font-size: 16px;
+  text-decoration: none;
+  padding: 12px 0;
+}
+
+.docs-nav-brand:hover {
+  color: #79c0ff;
+}
+
+.docs-nav-links {
+  display: flex;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.docs-nav-links a {
+  color: #8b949e;
+  text-decoration: none;
+  padding: 12px 12px;
+  font-size: 14px;
+  border-bottom: 2px solid transparent;
+  display: block;
+  transition: all 0.2s;
+}
+
+.docs-nav-links a:hover {
+  color: #c9d1d9;
+  background: #21262d;
+}
+
+.docs-nav-links a.active {
+  color: #58a6ff;
+  border-bottom-color: #58a6ff;
+}
+
+.docs-nav-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: #8b949e;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 8px;
+}
+
+/* Mobile styles */
+@media (max-width: 768px) {
+  .docs-nav-toggle {
+    display: block;
+  }
+
+  .docs-nav-links {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #1b1f23;
+    flex-direction: column;
+    border-bottom: 1px solid #30363d;
+    padding: 8px 0;
+  }
+
+  .docs-nav-links.open {
+    display: flex;
+  }
+
+  .docs-nav-links a {
+    padding: 12px 16px;
+    border-bottom: none;
+  }
+
+  .docs-nav-links a:hover,
+  .docs-nav-links a.active {
+    background: #21262d;
+    border-bottom: none;
+  }
+}
+
 /* Code block copy button */
 .code-header {
   display: flex;
@@ -40,6 +143,44 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+  // Create navigation bar
+  const nav = document.createElement('nav');
+  nav.className = 'docs-nav';
+  nav.innerHTML = `
+    <div class="docs-nav-container">
+      <a href="/BetterPGVectorN8N/" class="docs-nav-brand">pgvector-advanced</a>
+      <button class="docs-nav-toggle" aria-label="Toggle navigation">☰</button>
+      <ul class="docs-nav-links">
+        <li><a href="/BetterPGVectorN8N/">Home</a></li>
+        <li><a href="/BetterPGVectorN8N/installation">Install</a></li>
+        <li><a href="/BetterPGVectorN8N/quick-start">Quick Start</a></li>
+        <li><a href="/BetterPGVectorN8N/operations">Operations</a></li>
+        <li><a href="/BetterPGVectorN8N/docker">Docker</a></li>
+        <li><a href="/BetterPGVectorN8N/api-reference">API</a></li>
+        <li><a href="/BetterPGVectorN8N/troubleshooting">Help</a></li>
+        <li><a href="https://github.com/aaron777collins/BetterPGVectorN8N">GitHub</a></li>
+      </ul>
+    </div>
+  `;
+  document.body.insertBefore(nav, document.body.firstChild);
+
+  // Mobile toggle
+  const toggle = nav.querySelector('.docs-nav-toggle');
+  const links = nav.querySelector('.docs-nav-links');
+  toggle.addEventListener('click', function() {
+    links.classList.toggle('open');
+    toggle.textContent = links.classList.contains('open') ? '✕' : '☰';
+  });
+
+  // Highlight current page
+  const currentPath = window.location.pathname;
+  nav.querySelectorAll('.docs-nav-links a').forEach(function(link) {
+    if (link.getAttribute('href') === currentPath ||
+        (currentPath.endsWith('/') && link.getAttribute('href') === currentPath.slice(0, -1))) {
+      link.classList.add('active');
+    }
+  });
+
   // Find all code blocks
   document.querySelectorAll('pre').forEach(function(pre) {
     // Skip if already wrapped
