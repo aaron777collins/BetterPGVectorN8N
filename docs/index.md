@@ -78,5 +78,6 @@ MIT
 
 **Made with ❤️ for the n8n community**
 
-[View on GitHub](https://github.com/aaron777collins/BetterPGVectorN8N){: .btn }
-[View on npm](https://www.npmjs.com/package/n8n-nodes-pgvector-advanced){: .btn }
+[GitHub](https://github.com/aaron777collins/BetterPGVectorN8N){: .btn }
+[npm Package](https://www.npmjs.com/package/n8n-nodes-pgvector-advanced){: .btn .btn-primary }
+[Report Issue](https://github.com/aaron777collins/BetterPGVectorN8N/issues){: .btn }
