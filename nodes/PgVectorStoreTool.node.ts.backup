@@ -19,7 +19,7 @@ import type {
 } from 'n8n-workflow';
 import { DynamicStructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { DatabaseManager, getSslConfig } from '../lib/db';
+import { DatabaseManager } from '../lib/db';
 import { PgVectorManager, DistanceMetric } from '../lib/pgvector';
 import { VectorStoreOperations } from '../lib/vectorstore';
 import { SchemaConfig } from '../lib/schemaConfig';
@@ -883,7 +883,7 @@ export class PgVectorStoreTool implements INodeType {
       database: credentials.database as string,
       user: credentials.user as string,
       password: credentials.password as string,
-      ssl: getSslConfig(credentials.ssl as string),
+      ssl: credentials.ssl as boolean,
     });
 
     // Build schema config based on mode

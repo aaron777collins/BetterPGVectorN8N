@@ -10,28 +10,6 @@ export interface QueryOptions {
   timeout?: number;
 }
 
-/**
- * Convert SSL mode string to pg Pool ssl config
- * @param sslMode - 'disable', 'allow', 'require', 'verify-self-signed', 'verify-ca'
- * @returns false | { rejectUnauthorized: boolean }
- */
-export function getSslConfig(sslMode: string | boolean | undefined): false | { rejectUnauthorized: boolean } {
-  if (sslMode === false || sslMode === 'disable' || !sslMode) {
-    return false;
-  }
-  if (sslMode === true || sslMode === 'require' || sslMode === 'allow') {
-    return { rejectUnauthorized: true };
-  }
-  if (sslMode === 'verify-self-signed') {
-    return { rejectUnauthorized: false };
-  }
-  if (sslMode === 'verify-ca') {
-    return { rejectUnauthorized: true };
-  }
-  // Default to disabled for unknown values
-  return false;
-}
-
 export interface DatabaseConfig extends PoolConfig {
   // Inherit all Pool config options
 }

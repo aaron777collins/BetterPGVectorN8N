@@ -1,6 +1,6 @@
 {
   "name": "n8n-nodes-pgvector-advanced",
-  "version": "1.7.2",
+  "version": "1.7.3",
   "description": "Advanced PGVector + Postgres nodes for n8n with full CRUD control",
   "license": "MIT",
   "homepage": "https://aaron777collins.github.io/BetterPGVectorN8N/",

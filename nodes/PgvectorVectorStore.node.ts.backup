@@ -6,7 +6,7 @@ import {
   NodeOperationError,
 } from 'n8n-workflow';
 
-import { DatabaseManager, getSslConfig } from '../lib/db';
+import { DatabaseManager } from '../lib/db';
 import { PgVectorManager, DistanceMetric, IndexType } from '../lib/pgvector';
 import { VectorStoreOperations, UpsertParams, QueryParams, DeleteParams, GetParams } from '../lib/vectorstore';
 import { SchemaConfig } from '../lib/schemaConfig';
@@ -719,7 +719,6 @@ export class PgvectorVectorStore implements INodeType {
       max: (credentials.max as number) || 20,
       connectionTimeoutMillis: (credentials.connectionTimeoutMillis as number) || 5000,
       idleTimeoutMillis: (credentials.idleTimeoutMillis as number) || 30000,
-      ssl: getSslConfig(credentials.ssl as string),
     });
 
     // Build schema config based on mode
