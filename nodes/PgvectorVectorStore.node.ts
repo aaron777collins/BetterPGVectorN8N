@@ -9,6 +9,7 @@ import {
 import { DatabaseManager } from '../lib/db';
 import { PgVectorManager, DistanceMetric, IndexType } from '../lib/pgvector';
 import { VectorStoreOperations, UpsertParams, QueryParams, DeleteParams, GetParams } from '../lib/vectorstore';
+import { SchemaConfig } from '../lib/schemaConfig';
 
 export class PgvectorVectorStore implements INodeType {
   description: INodeTypeDescription = {
@@ -78,10 +79,136 @@ export class PgvectorVectorStore implements INodeType {
         type: 'string',
         required: true,
         default: '',
-        description: 'Collection name to organize embeddings',
+        description: 'Collection name to organize embeddings (partition value)',
         displayOptions: {
           hide: {
             operation: ['admin'],
+          },
+        },
+      },
+
+      // ═══════════════════════════════════════════════════════
+      // SCHEMA CONFIGURATION
+      // ═══════════════════════════════════════════════════════
+      {
+        displayName: 'Schema Mode',
+        name: 'schemaMode',
+        type: 'options',
+        default: 'default',
+        options: [
+          {
+            name: 'Default Schema',
+            value: 'default',
+            description: 'Use the standard embeddings table schema',
+          },
+          {
+            name: 'Custom Schema',
+            value: 'custom',
+            description: 'Configure custom table and column names',
+          },
+        ],
+        description: 'How to interact with the database',
+      },
+      {
+        displayName: 'Table Name',
+        name: 'tableName',
+        type: 'string',
+        default: 'embeddings',
+        description: 'Database table name',
+        displayOptions: {
+          show: {
+            schemaMode: ['custom'],
+          },
+        },
+      },
+      {
+        displayName: 'Create Table If Missing',
+        name: 'createTable',
+        type: 'boolean',
+        default: true,
+        description: 'Create the table if it does not exist',
+        displayOptions: {
+          show: {
+            schemaMode: ['custom'],
+          },
+        },
+      },
+      {
+        displayName: 'Column Mapping',
+        name: 'columnMapping',
+        type: 'fixedCollection',
+        default: {},
+        placeholder: 'Configure column names',
+        typeOptions: {
+          multipleValues: false,
+        },
+        displayOptions: {
+          show: {
+            schemaMode: ['custom'],
+          },
+        },
+        options: [
+          {
+            name: 'columns',
+            displayName: 'Columns',
+            values: [
+              {
+                displayName: 'Embedding Column',
+                name: 'embedding',
+                type: 'string',
+                default: 'embedding',
+                required: true,
+                description: 'Column containing the vector embedding (required)',
+              },
+              {
+                displayName: 'ID Column',
+                name: 'id',
+                type: 'string',
+                default: 'id',
+                description: 'Primary key column',
+              },
+              {
+                displayName: 'Content Column',
+                name: 'content',
+                type: 'string',
+                default: 'content',
+                description: 'Text content column',
+              },
+              {
+                displayName: 'Partition Column',
+                name: 'partition',
+                type: 'string',
+                default: 'collection',
+                description: 'Column for partitioning data (like "collection")',
+              },
+              {
+                displayName: 'Metadata Column',
+                name: 'metadata',
+                type: 'string',
+                default: 'metadata',
+                description: 'JSONB column for metadata/filters',
+              },
+              {
+                displayName: 'External ID Column',
+                name: 'externalId',
+                type: 'string',
+                default: 'external_id',
+                description: 'Column for user-provided IDs',
+              },
+            ],
+          },
+        ],
+      },
+      {
+        displayName: 'Extra Return Columns',
+        name: 'extraReturnColumns',
+        type: 'string',
+        default: '',
+        placeholder: 'title, author, created_at',
+        description: 'Additional columns to return in query results (comma-separated)',
+        displayOptions: {
+          show: {
+            schemaMode: ['custom'],
           },
         },
       },
@@ -594,8 +721,49 @@ export class PgvectorVectorStore implements INodeType {
       idleTimeoutMillis: (credentials.idleTimeoutMillis as number) || 30000,
     });
 
-    const pgVector = new PgVectorManager(db);
+    // Build schema config based on mode
+    const schemaMode = this.getNodeParameter('schemaMode', 0, 'default') as string;
+    let schemaConfig: Partial<SchemaConfig> | undefined;
+
+    if (schemaMode === 'custom') {
+      const tableName = this.getNodeParameter('tableName', 0, 'embeddings') as string;
+      const createTable = this.getNodeParameter('createTable', 0, true) as boolean;
+      const columnMapping = this.getNodeParameter('columnMapping', 0, {}) as any;
+      const extraReturnColumnsStr = this.getNodeParameter('extraReturnColumns', 0, '') as string;
+
+      const columns = columnMapping.columns || {};
+
+      schemaConfig = {
+        tableName,
+        createTable,
+        columns: {
+          id: columns.id || 'id',
+          embedding: columns.embedding || 'embedding',
+          content: columns.content || 'content',
+          metadata: columns.metadata || 'metadata',
+          partition: columns.partition || 'collection',
+          externalId: columns.externalId || 'external_id',
+        },
+        extraReturnColumns: extraReturnColumnsStr
+          ? extraReturnColumnsStr.split(',').map(c => c.trim()).filter(c => c)
+          : undefined,
+      };
+    }
+
+    const pgVector = new PgVectorManager(db, schemaConfig);
     const vectorStore = new VectorStoreOperations(db, pgVector);
+
+    // Helper to safely parse JSON that might already be an object
+    const safeJsonParse = <T>(value: string | T, defaultValue: T): T => {
+      if (typeof value === 'string') {
+        try {
+          return JSON.parse(value) as T;
+        } catch {
+          return defaultValue;
+        }
+      }
+      return value as T;
+    };
 
     try {
       if (operation === 'upsert') {
@@ -611,11 +779,11 @@ export class PgvectorVectorStore implements INodeType {
           const id = this.getNodeParameter('id', 0, '') as string;
           const externalId = this.getNodeParameter('externalId', 0, '') as string;
           const content = this.getNodeParameter('content', 0, '') as string;
-          const metadataStr = this.getNodeParameter('metadata', 0, '{}') as string;
-          const embeddingStr = this.getNodeParameter('embedding', 0, '[]') as string;
+          const metadataStr = this.getNodeParameter('metadata', 0, '{}') as string | Record<string, any>;
+          const embeddingStr = this.getNodeParameter('embedding', 0, '[]') as string | number[];
 
-          const metadata = JSON.parse(metadataStr);
-          const embedding = JSON.parse(embeddingStr);
+          const metadata = safeJsonParse(metadataStr, {});
+          const embedding = safeJsonParse(embeddingStr, [] as number[]);
 
           if (!embeddingStr || !embedding || !Array.isArray(embedding) || embedding.length === 0) {
             throw new Error('Embedding is required and must be a non-empty array');
@@ -661,15 +829,15 @@ export class PgvectorVectorStore implements INodeType {
         }
       } else if (operation === 'query') {
         const collection = this.getNodeParameter('collection', 0) as string;
-        const queryEmbeddingStr = this.getNodeParameter('queryEmbedding', 0) as string;
+        const queryEmbeddingStr = this.getNodeParameter('queryEmbedding', 0) as string | number[];
         const topK = this.getNodeParameter('topK', 0, 10) as number;
         const offset = this.getNodeParameter('offset', 0, 0) as number;
         const distanceMetric = this.getNodeParameter('distanceMetric', 0, 'cosine') as DistanceMetric;
-        const metadataFilterStr = this.getNodeParameter('metadataFilter', 0, '{}') as string;
+        const metadataFilterStr = this.getNodeParameter('metadataFilter', 0, '{}') as string | Record<string, any>;
         const includeEmbedding = this.getNodeParameter('includeEmbedding', 0, false) as boolean;
 
-        const queryEmbedding = JSON.parse(queryEmbeddingStr);
-        const metadataFilter = JSON.parse(metadataFilterStr);
+        const queryEmbedding = safeJsonParse(queryEmbeddingStr, [] as number[]);
+        const metadataFilter = safeJsonParse(metadataFilterStr, {});
 
         const params: QueryParams = {
           collection,
@@ -702,8 +870,8 @@ export class PgvectorVectorStore implements INodeType {
           params.collection = collection;
           params.externalId = externalIds;
         } else if (deleteBy === 'metadata') {
-          const metadataFilterStr = this.getNodeParameter('deleteMetadataFilter', 0, '{}') as string;
-          const metadataFilter = JSON.parse(metadataFilterStr);
+          const metadataFilterStr = this.getNodeParameter('deleteMetadataFilter', 0, '{}') as string | Record<string, any>;
+          const metadataFilter = safeJsonParse(metadataFilterStr, {});
           params.collection = collection;
           params.metadataFilter = metadataFilter;
         }
@@ -744,6 +912,7 @@ export class PgvectorVectorStore implements INodeType {
           returnData.push({
             json: {
               success: true,
+              operation: 'ensureSchema',
               message: `Schema ensured for ${dimensions} dimensions`,
             },
           });
@@ -767,6 +936,7 @@ export class PgvectorVectorStore implements INodeType {
           returnData.push({
             json: {
               success: true,
+              operation: 'createIndex',
               message: `Index created for collection: ${collection}`,
               indexType,
               distanceMetric,
@@ -780,6 +950,7 @@ export class PgvectorVectorStore implements INodeType {
           returnData.push({
             json: {
               success: true,
+              operation: 'dropCollection',
               collection,
               deletedCount: result.deletedCount,
             },

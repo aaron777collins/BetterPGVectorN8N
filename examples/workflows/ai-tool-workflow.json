@@ -1,0 +1,121 @@
+{
+  "name": "PGVector AI Tool Test",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-1",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "recall",
+        "collection": "knowledge",
+        "topK": 5,
+        "minSimilarity": 0,
+        "distanceMetric": "cosine",
+        "toolDescription": "Search the knowledge base for relevant information"
+      },
+      "id": "recall-tool",
+      "name": "Recall Tool",
+      "type": "n8n-nodes-pgvector-advanced.pgVectorStoreTool",
+      "typeVersion": 1,
+      "position": [450, 200],
+      "credentials": {
+        "postgres": {
+          "id": "test-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "remember",
+        "collection": "knowledge",
+        "autoGenerateId": true,
+        "updateThreshold": 0.7,
+        "distanceMetric": "cosine",
+        "toolDescription": "Store new information in the knowledge base"
+      },
+      "id": "remember-tool",
+      "name": "Remember Tool",
+      "type": "n8n-nodes-pgvector-advanced.pgVectorStoreTool",
+      "typeVersion": 1,
+      "position": [450, 400],
+      "credentials": {
+        "postgres": {
+          "id": "test-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "forget",
+        "collection": "knowledge",
+        "idFormatHint": "knowledge-timestamp-random",
+        "returnDeletedContent": true,
+        "toolDescription": "Delete an entry from the knowledge base by ID"
+      },
+      "id": "forget-tool",
+      "name": "Forget Tool",
+      "type": "n8n-nodes-pgvector-advanced.pgVectorStoreTool",
+      "typeVersion": 1,
+      "position": [650, 200],
+      "credentials": {
+        "postgres": {
+          "id": "test-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "forgetSimilar",
+        "collection": "knowledge",
+        "similarityThreshold": 0.8,
+        "dryRun": true,
+        "distanceMetric": "cosine",
+        "toolDescription": "Delete entries similar to a concept"
+      },
+      "id": "forget-similar-tool",
+      "name": "Forget Similar Tool",
+      "type": "n8n-nodes-pgvector-advanced.pgVectorStoreTool",
+      "typeVersion": 1,
+      "position": [650, 400],
+      "credentials": {
+        "postgres": {
+          "id": "test-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "lookup",
+        "collection": "knowledge",
+        "idFormatHint": "knowledge-timestamp-random",
+        "includeMetadata": true,
+        "includeTimestamps": true,
+        "toolDescription": "Get a specific entry by ID"
+      },
+      "id": "lookup-tool",
+      "name": "Lookup Tool",
+      "type": "n8n-nodes-pgvector-advanced.pgVectorStoreTool",
+      "typeVersion": 1,
+      "position": [850, 300],
+      "credentials": {
+        "postgres": {
+          "id": "test-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    }
+  ],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

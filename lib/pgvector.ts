@@ -5,6 +5,11 @@
 
 import { DatabaseManager } from './db';
 import { sanitizeTableName } from './sqlBuilder';
+import {
+  SchemaConfig,
+  DEFAULT_SCHEMA,
+  validateSchemaConfig,
+} from './schemaConfig';
 
 export enum DistanceMetric {
   COSINE = 'cosine',
@@ -27,11 +32,22 @@ export interface DropCollectionResult {
  */
 export class PgVectorManager {
   private db: DatabaseManager;
-  private tableName = 'embeddings';
+  private schemaConfig: SchemaConfig;
   private currentDimensions?: number;
 
-  constructor(db: DatabaseManager) {
+  constructor(db: DatabaseManager, schemaConfig?: Partial<SchemaConfig>) {
     this.db = db;
+    // Merge provided config with defaults
+    this.schemaConfig = schemaConfig
+      ? validateSchemaConfig({ ...DEFAULT_SCHEMA, ...schemaConfig, columns: { ...DEFAULT_SCHEMA.columns, ...schemaConfig.columns } })
+      : DEFAULT_SCHEMA;
+  }
+
+  /**
+   * Get the current schema configuration
+   */
+  getSchemaConfig(): SchemaConfig {
+    return this.schemaConfig;
   }
 
   /**
@@ -44,46 +60,83 @@ export class PgVectorManager {
 
   /**
    * Ensure embeddings table exists with correct schema
+   * If schemaConfig.createTable is false, assumes table already exists
    */
-  async ensureTable(dimensions: number): Promise<void> {
-    this.validateDimensions(dimensions);
-    this.currentDimensions = dimensions;
+  async ensureTable(dimensions?: number): Promise<void> {
+    // Use nullish coalescing to properly handle 0 (which should fail validation)
+    const effectiveDimensions = dimensions ?? this.schemaConfig.dimensions ?? 1536;
+    this.validateDimensions(effectiveDimensions);
+    this.currentDimensions = effectiveDimensions;
 
-    const tableName = sanitizeTableName(this.tableName);
+    // If createTable is false, just validate dimensions and return
+    if (this.schemaConfig.createTable === false) {
+      return;
+    }
+
+    const tableName = sanitizeTableName(this.schemaConfig.tableName);
+    const cols = this.schemaConfig.columns;
+
+    // Build CREATE TABLE SQL using schema config
+    const columnDefs: string[] = [
+      `${cols.id} UUID PRIMARY KEY DEFAULT gen_random_uuid()`,
+    ];
+
+    if (cols.partition) {
+      columnDefs.push(`${cols.partition} TEXT NOT NULL`);
+    }
+    if (cols.externalId) {
+      columnDefs.push(`${cols.externalId} TEXT`);
+    }
+    if (cols.content) {
+      columnDefs.push(`${cols.content} TEXT`);
+    }
+    if (cols.metadata) {
+      columnDefs.push(`${cols.metadata} JSONB NOT NULL DEFAULT '{}'::jsonb`);
+    }
+
+    columnDefs.push(`${cols.embedding} vector(${effectiveDimensions}) NOT NULL`);
+
+    if (cols.createdAt) {
+      columnDefs.push(`${cols.createdAt} TIMESTAMPTZ DEFAULT NOW()`);
+    }
+    if (cols.updatedAt) {
+      columnDefs.push(`${cols.updatedAt} TIMESTAMPTZ DEFAULT NOW()`);
+    }
+
+    // Add unique constraint if both partition and externalId exist
+    if (cols.partition && cols.externalId) {
+      columnDefs.push(`UNIQUE(${cols.partition}, ${cols.externalId})`);
+    }
 
     const createTableSQL = `
       CREATE TABLE IF NOT EXISTS ${tableName} (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        collection TEXT NOT NULL,
-        external_id TEXT,
-        content TEXT,
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        embedding vector(${dimensions}) NOT NULL,
-        created_at TIMESTAMPTZ DEFAULT NOW(),
-        updated_at TIMESTAMPTZ DEFAULT NOW(),
-        UNIQUE(collection, external_id)
+        ${columnDefs.join(',\n        ')}
       )
     `;
 
     await this.db.query(createTableSQL, []);
 
-    // Create updated_at trigger
-    await this.createUpdatedAtTrigger();
+    // Create updated_at trigger if updatedAt column exists
+    if (cols.updatedAt) {
+      await this.createUpdatedAtTrigger();
+    }
   }
 
   /**
    * Create trigger to auto-update updated_at timestamp
    */
   private async createUpdatedAtTrigger(): Promise<void> {
-    const tableName = sanitizeTableName(this.tableName);
+    const tableName = sanitizeTableName(this.schemaConfig.tableName);
+    const updatedAtCol = this.schemaConfig.columns.updatedAt || 'updated_at';
+    const triggerName = `update_${tableName}_${updatedAtCol}`;
 
-    // Create trigger function if it doesn't exist
+    // Create trigger function if it doesn't exist (uses dynamic column name)
     await this.db.query(
       `
       CREATE OR REPLACE FUNCTION update_updated_at_column()
       RETURNS TRIGGER AS $$
       BEGIN
-        NEW.updated_at = NOW();
+        NEW.${updatedAtCol} = NOW();
         RETURN NEW;
       END;
       $$ language 'plpgsql'
@@ -93,14 +146,14 @@ export class PgVectorManager {
 
     // Drop trigger if exists
     await this.db.query(
-      `DROP TRIGGER IF EXISTS update_embeddings_updated_at ON ${tableName}`,
+      `DROP TRIGGER IF EXISTS ${triggerName} ON ${tableName}`,
       []
     );
 
     // Create trigger
     await this.db.query(
       `
-      CREATE TRIGGER update_embeddings_updated_at
+      CREATE TRIGGER ${triggerName}
       BEFORE UPDATE ON ${tableName}
       FOR EACH ROW
       EXECUTE FUNCTION update_updated_at_column()
@@ -110,14 +163,17 @@ export class PgVectorManager {
   }
 
   /**
-   * Ensure vector index exists for a collection
+   * Ensure vector index exists for a collection/partition
    */
   async ensureIndex(
     collection: string,
     indexType: IndexType = IndexType.HNSW,
     distanceMetric: DistanceMetric = DistanceMetric.COSINE
   ): Promise<void> {
-    const tableName = sanitizeTableName(this.tableName);
+    const tableName = sanitizeTableName(this.schemaConfig.tableName);
+    const embeddingCol = this.schemaConfig.columns.embedding;
+    const partitionCol = this.schemaConfig.columns.partition;
+
     const safeColl = collection.replace(/[^a-zA-Z0-9_]/g, '_');
     const indexName = `idx_${tableName}_${safeColl}_${indexType}`;
 
@@ -134,22 +190,24 @@ export class PgVectorManager {
     const opClass = this.getOperatorClass(distanceMetric);
 
     let indexSQL: string;
+    const whereClause = partitionCol ? `WHERE ${partitionCol} = '${collection}'` : '';
+
     if (indexType === IndexType.HNSW) {
       // HNSW index - good for high recall, faster queries
       indexSQL = `
         CREATE INDEX ${indexName}
         ON ${tableName}
-        USING hnsw (embedding ${opClass})
-        WHERE collection = '${collection}'
+        USING hnsw (${embeddingCol} ${opClass})
+        ${whereClause}
       `;
     } else {
       // IVFFlat index - faster build time, good for large datasets
       indexSQL = `
         CREATE INDEX ${indexName}
         ON ${tableName}
-        USING ivfflat (embedding ${opClass})
+        USING ivfflat (${embeddingCol} ${opClass})
         WITH (lists = 100)
-        WHERE collection = '${collection}'
+        ${whereClause}
       `;
     }
 
@@ -160,8 +218,13 @@ export class PgVectorManager {
    * Ensure metadata JSONB index exists
    */
   async ensureMetadataIndex(): Promise<void> {
-    const tableName = sanitizeTableName(this.tableName);
-    const indexName = `idx_${tableName}_metadata`;
+    const metadataCol = this.schemaConfig.columns.metadata;
+    if (!metadataCol) {
+      return; // No metadata column configured
+    }
+
+    const tableName = sanitizeTableName(this.schemaConfig.tableName);
+    const indexName = `idx_${tableName}_${metadataCol}`;
 
     // Check if index already exists
     const existsResult = await this.db.query(
@@ -174,19 +237,24 @@ export class PgVectorManager {
     }
 
     await this.db.query(
-      `CREATE INDEX ${indexName} ON ${tableName} USING GIN (metadata)`,
+      `CREATE INDEX ${indexName} ON ${tableName} USING GIN (${metadataCol})`,
       []
     );
   }
 
   /**
-   * Delete all records from a collection
+   * Delete all records from a collection/partition
    */
   async dropCollection(collection: string): Promise<DropCollectionResult> {
-    const tableName = sanitizeTableName(this.tableName);
+    const tableName = sanitizeTableName(this.schemaConfig.tableName);
+    const partitionCol = this.schemaConfig.columns.partition;
+
+    if (!partitionCol) {
+      throw new Error('Cannot drop collection: no partition column configured');
+    }
 
     const result = await this.db.query(
-      `DELETE FROM ${tableName} WHERE collection = $1`,
+      `DELETE FROM ${tableName} WHERE ${partitionCol} = $1`,
       [collection]
     );
 
@@ -250,7 +318,7 @@ export class PgVectorManager {
    * Get table name
    */
   getTableName(): string {
-    return this.tableName;
+    return this.schemaConfig.tableName;
   }
 
   /**

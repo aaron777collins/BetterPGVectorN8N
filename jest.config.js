@@ -34,11 +34,15 @@ module.exports = {
       ...baseConfig,
       displayName: 'integration',
       testMatch: ['<rootDir>/tests/integration/**/*.test.ts'],
+      // Run in band to prevent database race conditions
+      maxWorkers: 1,
     },
     {
       ...baseConfig,
       displayName: 'e2e',
       testMatch: ['<rootDir>/tests/e2e/**/*.test.ts'],
+      // Run in band to prevent database race conditions
+      maxWorkers: 1,
     },
   ],
 };

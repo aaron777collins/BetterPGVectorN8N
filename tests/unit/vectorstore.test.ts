@@ -9,6 +9,7 @@ import { VectorStoreOperations, UpsertParams, QueryParams, DeleteParams, GetPara
 import { DatabaseManager } from '../../lib/db';
 import { PgVectorManager, DistanceMetric } from '../../lib/pgvector';
 import { generateEmbedding } from '../helpers/testData';
+import { DEFAULT_SCHEMA } from '../../lib/schemaConfig';
 
 // Mock dependencies
 jest.mock('../../lib/db');
@@ -43,6 +44,7 @@ describe('VectorStoreOperations - Unit Tests', () => {
       validateDimensions: jest.fn(),
       getTableName: jest.fn().mockReturnValue('embeddings'),
       getDimensions: jest.fn(),
+      getSchemaConfig: jest.fn().mockReturnValue(DEFAULT_SCHEMA),
     } as any;
 
     // Create VectorStoreOperations instance
@@ -54,8 +56,8 @@ describe('VectorStoreOperations - Unit Tests', () => {
       expect(vectorStore).toBeInstanceOf(VectorStoreOperations);
     });
 
-    it('should get table name from PgVectorManager', () => {
-      expect(mockPgVector.getTableName).toHaveBeenCalled();
+    it('should get schema config from PgVectorManager', () => {
+      expect(mockPgVector.getSchemaConfig).toHaveBeenCalled();
     });
   });
 
@@ -622,7 +624,7 @@ describe('VectorStoreOperations - Unit Tests', () => {
       const params: DeleteParams = {};
 
       await expect(vectorStore.delete(params)).rejects.toThrow(
-        'Either id or collection must be provided',
+        'Either id or (partition column + collection) must be provided for delete',
       );
     });
 
@@ -655,6 +657,7 @@ describe('VectorStoreOperations - Unit Tests', () => {
     it('should get by single ID', async () => {
       const params: GetParams = {
         id: '550e8400-e29b-41d4-a716-446655440000',
+        includeEmbedding: true,
       };
 
       mockDb.query.mockResolvedValueOnce({
@@ -731,7 +734,7 @@ describe('VectorStoreOperations - Unit Tests', () => {
       const params: GetParams = {};
 
       await expect(vectorStore.get(params)).rejects.toThrow(
-        'Either id or collection must be provided',
+        'Either id or (partition column + collection) must be provided',
       );
     });
 
@@ -760,6 +763,7 @@ describe('VectorStoreOperations - Unit Tests', () => {
     it('should parse embedding JSON', async () => {
       const params: GetParams = {
         id: 'test-id',
+        includeEmbedding: true,
       };
 
       const embedding = [0.1, 0.2, 0.3];

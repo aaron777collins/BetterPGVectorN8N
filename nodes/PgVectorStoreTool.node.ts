@@ -22,6 +22,7 @@ import { z } from 'zod';
 import { DatabaseManager } from '../lib/db';
 import { PgVectorManager, DistanceMetric } from '../lib/pgvector';
 import { VectorStoreOperations } from '../lib/vectorstore';
+import { SchemaConfig } from '../lib/schemaConfig';
 
 interface EmbeddingsModel {
   embedQuery(text: string): Promise<number[]>;
@@ -53,14 +54,19 @@ function createRememberTool(
     name: `remember_${collection.replace(/[^a-zA-Z0-9_]/g, '_')}`,
     description: toolDescription,
     schema: z.object({
-      content: z.string().describe('The information to store'),
+      // Accept both 'content' and 'text' to handle different AI models
+      content: z.string().optional().describe('The information to store'),
+      text: z.string().optional().describe('Alternative: the information to store'),
       id: z.string().optional().describe(idDescription),
       updateSimilar: z.string().optional().describe('Find entry similar to this and update it'),
       metadata: z.record(z.unknown()).optional().describe('Tags like {category: "meeting"}'),
+    }).refine(data => data.content || data.text, {
+      message: "Either 'content' or 'text' must be provided",
     }),
-    func: async ({ content, id, updateSimilar, metadata }) => {
+    func: async ({ content, text, id, updateSimilar, metadata }) => {
+      const storeContent = content || text || '';
       try {
-        const embedding = await embeddings.embedQuery(content);
+        const embedding = await embeddings.embedQuery(storeContent);
 
         // If updateSimilar provided, find most similar entry and update it
         if (updateSimilar && !id) {
@@ -87,7 +93,7 @@ function createRememberTool(
           // Update the found entry
           const result = await vectorStore.upsert({
             collection,
-            content,
+            content: storeContent,
             embedding,
             externalId: match.externalId || undefined,
             id: match.externalId ? undefined : match.id,
@@ -106,7 +112,7 @@ function createRememberTool(
         // Standard upsert by ID
         const result = await vectorStore.upsert({
           collection,
-          content,
+          content: storeContent,
           embedding,
           externalId: finalId,
           metadata: (metadata || {}) as Record<string, unknown>,
@@ -138,12 +144,17 @@ function createRecallTool(
     name: `recall_${collection.replace(/[^a-zA-Z0-9_]/g, '_')}`,
     description: toolDescription,
     schema: z.object({
-      query: z.string().describe('What to search for'),
+      // Accept both 'query' and 'input' to handle different AI models
+      query: z.string().optional().describe('What to search for'),
+      input: z.string().optional().describe('Alternative: what to search for'),
       filter: z.record(z.unknown()).optional().describe('Filter by metadata, e.g. {category: "meeting"}'),
+    }).refine(data => data.query || data.input, {
+      message: "Either 'query' or 'input' must be provided",
     }),
-    func: async ({ query, filter }) => {
+    func: async ({ query, input, filter }) => {
+      const searchText = query || input || '';
       try {
-        const queryEmbedding = await embeddings.embedQuery(query);
+        const queryEmbedding = await embeddings.embedQuery(searchText);
 
         const result = await vectorStore.query({
           collection,
@@ -159,7 +170,7 @@ function createRecallTool(
         const filtered = result.rows.filter(row => row.score <= maxDistance);
 
         if (filtered.length === 0) {
-          return `No results found for: "${query}"`;
+          return `No results found for: "${searchText}"`;
         }
 
         const formatted = filtered.map((row, i) => {
@@ -252,11 +263,17 @@ function createForgetSimilarTool(
     name: `forget_similar_${collection.replace(/[^a-zA-Z0-9_]/g, '_')}`,
     description: toolDescription,
     schema: z.object({
-      concept: z.string().describe('Delete entries similar to this concept'),
+      // Accept both 'concept' and 'input' to handle different AI models
+      concept: z.string().optional().describe('Delete entries similar to this concept'),
+      input: z.string().optional().describe('Alternative: delete entries similar to this'),
+      query: z.string().optional().describe('Alternative: delete entries similar to this'),
+    }).refine(data => data.concept || data.input || data.query, {
+      message: "Either 'concept', 'input', or 'query' must be provided",
     }),
-    func: async ({ concept }) => {
+    func: async ({ concept, input, query }) => {
+      const searchConcept = concept || input || query || '';
       try {
-        const queryEmbedding = await embeddings.embedQuery(concept);
+        const queryEmbedding = await embeddings.embedQuery(searchConcept);
 
         // Find similar entries
         const similar = await vectorStore.query({
@@ -272,7 +289,7 @@ function createForgetSimilarTool(
         const toDelete = similar.rows.filter(row => row.score <= maxDistance);
 
         if (toDelete.length === 0) {
-          return `No entries found similar to "${concept}" (threshold: ${threshold})`;
+          return `No entries found similar to "${searchConcept}" (threshold: ${threshold})`;
         }
 
         if (dryRun) {
@@ -295,7 +312,7 @@ function createForgetSimilarTool(
           deletedCount += deleteResult.deletedCount;
         }
 
-        return `Deleted ${deletedCount} entries similar to "${concept}"`;
+        return `Deleted ${deletedCount} entries similar to "${searchConcept}"`;
       } catch (error) {
         return `Delete failed: ${(error as Error).message}`;
       }
@@ -441,7 +458,167 @@ export class PgVectorStoreTool implements INodeType {
         type: 'string',
         default: 'knowledge',
         required: true,
-        description: 'Name of the knowledge base collection',
+        description: 'Name of the knowledge base collection (partition value)',
+      },
+      // ═══════════════════════════════════════════════════════
+      // SCHEMA CONFIGURATION
+      // ═══════════════════════════════════════════════════════
+      {
+        displayName: 'Schema Configuration',
+        name: 'schemaConfigNotice',
+        type: 'notice',
+        default: '',
+        displayOptions: {
+          show: {
+            '/schemaMode': ['fieldMapping'],
+          },
+        },
+      },
+      {
+        displayName: 'Schema Mode',
+        name: 'schemaMode',
+        type: 'options',
+        default: 'default',
+        options: [
+          {
+            name: 'Default Schema',
+            value: 'default',
+            description: 'Use the standard embeddings table schema',
+          },
+          {
+            name: 'Field Mapping',
+            value: 'fieldMapping',
+            description: 'Configure custom column names for an existing table',
+          },
+          {
+            name: 'SQL Template (Advanced)',
+            value: 'sqlTemplate',
+            description: 'Write custom SQL queries',
+          },
+        ],
+        description: 'How to interact with the database',
+      },
+      {
+        displayName: 'Table Name',
+        name: 'tableName',
+        type: 'string',
+        default: 'embeddings',
+        description: 'Database table name',
+        displayOptions: {
+          show: {
+            schemaMode: ['fieldMapping', 'sqlTemplate'],
+          },
+        },
+      },
+      {
+        displayName: 'Create Table If Missing',
+        name: 'createTable',
+        type: 'boolean',
+        default: false,
+        description: 'Create the table if it does not exist (requires proper column config)',
+        displayOptions: {
+          show: {
+            schemaMode: ['fieldMapping'],
+          },
+        },
+      },
+      // Column Mapping
+      {
+        displayName: 'Column Mapping',
+        name: 'columnMapping',
+        type: 'fixedCollection',
+        default: {},
+        placeholder: 'Configure column names',
+        typeOptions: {
+          multipleValues: false,
+        },
+        displayOptions: {
+          show: {
+            schemaMode: ['fieldMapping'],
+          },
+        },
+        options: [
+          {
+            name: 'columns',
+            displayName: 'Columns',
+            values: [
+              {
+                displayName: 'Embedding Column',
+                name: 'embedding',
+                type: 'string',
+                default: 'embedding',
+                required: true,
+                description: 'Column containing the vector embedding (required)',
+              },
+              {
+                displayName: 'ID Column',
+                name: 'id',
+                type: 'string',
+                default: 'id',
+                description: 'Primary key column',
+              },
+              {
+                displayName: 'Content Column',
+                name: 'content',
+                type: 'string',
+                default: 'content',
+                description: 'Text content column',
+              },
+              {
+                displayName: 'Partition Column',
+                name: 'partition',
+                type: 'string',
+                default: 'collection',
+                description: 'Column for partitioning data (like "collection")',
+              },
+              {
+                displayName: 'Metadata Column',
+                name: 'metadata',
+                type: 'string',
+                default: 'metadata',
+                description: 'JSONB column for metadata/filters',
+              },
+              {
+                displayName: 'External ID Column',
+                name: 'externalId',
+                type: 'string',
+                default: 'external_id',
+                description: 'Column for user-provided IDs',
+              },
+            ],
+          },
+        ],
+      },
+      {
+        displayName: 'Extra Return Columns',
+        name: 'extraReturnColumns',
+        type: 'string',
+        default: '',
+        placeholder: 'title, author, created_at',
+        description: 'Additional columns to return in query results (comma-separated)',
+        displayOptions: {
+          show: {
+            schemaMode: ['fieldMapping'],
+          },
+        },
+      },
+      // SQL Template Mode
+      {
+        displayName: 'Search SQL Template',
+        name: 'searchSqlTemplate',
+        type: 'string',
+        default: '',
+        placeholder: 'SELECT id, content, embedding <-> $1::vector AS score FROM my_table WHERE category = $2 ORDER BY score LIMIT $3',
+        description: 'Custom SQL for search. Placeholders: $1=embedding, $2=partition, $3=limit',
+        typeOptions: {
+          rows: 5,
+        },
+        displayOptions: {
+          show: {
+            schemaMode: ['sqlTemplate'],
+            operation: ['recall'],
+          },
+        },
       },
       {
         displayName: 'Tool Description',
@@ -688,6 +865,9 @@ export class PgVectorStoreTool implements INodeType {
     const collection = this.getNodeParameter('collection', 0) as string;
     const customDescription = this.getNodeParameter('toolDescription', 0, '') as string;
 
+    // Schema configuration
+    const schemaMode = this.getNodeParameter('schemaMode', 0, 'default') as string;
+
     const credentials = await this.getCredentials('postgres');
     const embeddingsInput = await this.getInputConnectionData('ai_embedding' as never, 0);
 
@@ -706,7 +886,41 @@ export class PgVectorStoreTool implements INodeType {
       ssl: credentials.ssl as boolean,
     });
 
-    const pgVector = new PgVectorManager(dbManager);
+    // Build schema config based on mode
+    let schemaConfig: Partial<SchemaConfig> | undefined;
+
+    if (schemaMode === 'fieldMapping') {
+      const tableName = this.getNodeParameter('tableName', 0, 'embeddings') as string;
+      const createTable = this.getNodeParameter('createTable', 0, false) as boolean;
+      const columnMapping = this.getNodeParameter('columnMapping', 0, {}) as any;
+      const extraReturnColumnsStr = this.getNodeParameter('extraReturnColumns', 0, '') as string;
+
+      const columns = columnMapping.columns || {};
+
+      schemaConfig = {
+        tableName,
+        createTable,
+        columns: {
+          id: columns.id || 'id',
+          embedding: columns.embedding || 'embedding',
+          content: columns.content || 'content',
+          metadata: columns.metadata || 'metadata',
+          partition: columns.partition || 'collection',
+          externalId: columns.externalId || 'external_id',
+        },
+        extraReturnColumns: extraReturnColumnsStr
+          ? extraReturnColumnsStr.split(',').map(c => c.trim()).filter(c => c)
+          : undefined,
+      };
+    } else if (schemaMode === 'sqlTemplate') {
+      const tableName = this.getNodeParameter('tableName', 0, 'embeddings') as string;
+      schemaConfig = {
+        tableName,
+        createTable: false, // Never auto-create in SQL template mode
+      };
+    }
+
+    const pgVector = new PgVectorManager(dbManager, schemaConfig);
     const vectorStore = new VectorStoreOperations(dbManager, pgVector);
 
     let tool: DynamicStructuredTool;

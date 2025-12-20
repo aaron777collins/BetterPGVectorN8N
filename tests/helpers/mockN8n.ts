@@ -2,7 +2,12 @@
  * Mock n8n execution context and helpers for testing
  */
 
-import { IExecuteFunctions, INodeExecutionData, ICredentialDataDecryptedObject } from 'n8n-workflow';
+import {
+  IExecuteFunctions,
+  INodeExecutionData,
+  ICredentialDataDecryptedObject,
+  ISupplyDataFunctions,
+} from 'n8n-workflow';
 import { testDbConfig } from './testData';
 
 /**
@@ -233,6 +238,165 @@ export const mockParameters = {
     adminCollection: 'test_collection',
   },
 };
+
+/**
+ * Mock parameter configurations for PgVectorStoreTool operations
+ */
+export const mockToolParameters = {
+  // Recall operation
+  recall: {
+    operation: 'recall',
+    collection: 'knowledge',
+    toolDescription: '',
+    schemaMode: 'default',
+    topK: 5,
+    minSimilarity: 0,
+    distanceMetric: 'cosine',
+  },
+
+  // Remember operation
+  remember: {
+    operation: 'remember',
+    collection: 'knowledge',
+    toolDescription: '',
+    schemaMode: 'default',
+    rememberIdHint: '',
+    autoGenerateId: false,
+    updateThreshold: 0.7,
+    distanceMetric: 'cosine',
+  },
+
+  // Remember with auto-generate ID
+  rememberAutoId: {
+    operation: 'remember',
+    collection: 'knowledge',
+    toolDescription: '',
+    schemaMode: 'default',
+    rememberIdHint: 'knowledge-timestamp-random',
+    autoGenerateId: true,
+    updateThreshold: 0.7,
+    distanceMetric: 'cosine',
+  },
+
+  // Forget operation
+  forget: {
+    operation: 'forget',
+    collection: 'knowledge',
+    toolDescription: '',
+    schemaMode: 'default',
+    idFormatHint: '',
+    returnDeletedContent: false,
+  },
+
+  // Forget Similar operation
+  forgetSimilar: {
+    operation: 'forgetSimilar',
+    collection: 'knowledge',
+    toolDescription: '',
+    schemaMode: 'default',
+    similarityThreshold: 0.8,
+    dryRun: true,
+    distanceMetric: 'cosine',
+  },
+
+  // Lookup operation
+  lookup: {
+    operation: 'lookup',
+    collection: 'knowledge',
+    toolDescription: '',
+    schemaMode: 'default',
+    idFormatHint: '',
+    includeMetadata: true,
+    includeTimestamps: true,
+  },
+};
+
+/**
+ * Create a mock ISupplyDataFunctions object for testing AI tool nodes
+ */
+export function createMockSupplyDataFunctions(
+  parameters: Record<string, any> = {},
+  credentials: ICredentialDataDecryptedObject = testDbConfig as any,
+  embeddingsModel?: any,
+): Partial<ISupplyDataFunctions> {
+  const mockContext = {
+    // Mock getCredentials
+    getCredentials: jest.fn().mockResolvedValue(credentials),
+
+    // Mock getNodeParameter
+    getNodeParameter: jest.fn((paramName: string, _itemIndex: number, defaultValue?: any) => {
+      const value = parameters[paramName];
+      return value !== undefined ? value : defaultValue;
+    }),
+
+    // Mock getInputConnectionData for embeddings model
+    getInputConnectionData: jest.fn().mockResolvedValue(embeddingsModel),
+
+    // Mock getNode
+    getNode: jest.fn().mockReturnValue({
+      name: 'PGVector Store Tool',
+      type: 'n8n-nodes-pgvector-advanced.pgVectorStoreTool',
+      typeVersion: 1,
+      position: [250, 300],
+    }),
+
+    // Mock getWorkflow
+    getWorkflow: jest.fn().mockReturnValue({
+      name: 'Test Workflow',
+      id: 'test-workflow-id',
+    }),
+
+    // Mock getExecutionId
+    getExecutionId: jest.fn().mockReturnValue('test-execution-id'),
+
+    // Mock continueOnFail
+    continueOnFail: jest.fn().mockReturnValue(false),
+
+    // Mock getMode
+    getMode: jest.fn().mockReturnValue('manual'),
+
+    // Mock logger
+    logger: {
+      debug: jest.fn(),
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    },
+  };
+
+  return mockContext as unknown as Partial<ISupplyDataFunctions>;
+}
+
+/**
+ * Mock embeddings model for testing AI tools
+ */
+export function createMockEmbeddingsModel(dimensions: number = 1536) {
+  return {
+    embedQuery: jest.fn().mockImplementation(async (text: string) => {
+      // Create a deterministic embedding based on text hash
+      const hash = text.split('').reduce((acc, char) => {
+        return ((acc << 5) - acc + char.charCodeAt(0)) | 0;
+      }, 0);
+
+      return Array(dimensions)
+        .fill(0)
+        .map((_, i) => Math.sin((hash + i) * 0.01) * 0.1);
+    }),
+    embedDocuments: jest.fn().mockImplementation(async (texts: string[]) => {
+      return Promise.all(
+        texts.map(text => {
+          const hash = text.split('').reduce((acc, char) => {
+            return ((acc << 5) - acc + char.charCodeAt(0)) | 0;
+          }, 0);
+
+          return Array(dimensions)
+            .fill(0)
+            .map((_, i) => Math.sin((hash + i) * 0.01) * 0.1);
+        }),
+      );
+    }),
+  };
+}
 
 /**
  * Wait for async operations (useful in tests)

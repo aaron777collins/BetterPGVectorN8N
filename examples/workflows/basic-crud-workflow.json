@@ -1,0 +1,172 @@
+{
+  "name": "PGVector Basic CRUD Test",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-1",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "admin",
+        "adminOperation": "ensureSchema",
+        "dimensions": 1536
+      },
+      "id": "setup-schema",
+      "name": "Setup Schema",
+      "type": "n8n-nodes-pgvector-advanced.pgvectorVectorStore",
+      "typeVersion": 1,
+      "position": [450, 300],
+      "credentials": {
+        "postgres": {
+          "id": "test-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "upsertMode": "single",
+        "collection": "test_docs",
+        "externalId": "doc-001",
+        "content": "This is a test document about artificial intelligence and machine learning.",
+        "metadata": "{\"category\": \"ai\", \"importance\": \"high\"}",
+        "embedding": "={{ JSON.stringify(Array(1536).fill(0).map((_, i) => Math.sin(i * 0.01))) }}"
+      },
+      "id": "upsert-doc",
+      "name": "Upsert Document",
+      "type": "n8n-nodes-pgvector-advanced.pgvectorVectorStore",
+      "typeVersion": 1,
+      "position": [650, 300],
+      "credentials": {
+        "postgres": {
+          "id": "test-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "query",
+        "collection": "test_docs",
+        "queryEmbedding": "={{ JSON.stringify(Array(1536).fill(0).map((_, i) => Math.sin(i * 0.01))) }}",
+        "topK": 5,
+        "distanceMetric": "cosine"
+      },
+      "id": "query-docs",
+      "name": "Query Documents",
+      "type": "n8n-nodes-pgvector-advanced.pgvectorVectorStore",
+      "typeVersion": 1,
+      "position": [850, 300],
+      "credentials": {
+        "postgres": {
+          "id": "test-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "getBy": "externalId",
+        "collection": "test_docs",
+        "getExternalIds": "doc-001",
+        "includeEmbedding": false
+      },
+      "id": "get-doc",
+      "name": "Get Document",
+      "type": "n8n-nodes-pgvector-advanced.pgvectorVectorStore",
+      "typeVersion": 1,
+      "position": [1050, 300],
+      "credentials": {
+        "postgres": {
+          "id": "test-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "delete",
+        "deleteBy": "externalId",
+        "collection": "test_docs",
+        "deleteExternalIds": "doc-001"
+      },
+      "id": "delete-doc",
+      "name": "Delete Document",
+      "type": "n8n-nodes-pgvector-advanced.pgvectorVectorStore",
+      "typeVersion": 1,
+      "position": [1250, 300],
+      "credentials": {
+        "postgres": {
+          "id": "test-cred",
+          "name": "PostgreSQL"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Setup Schema",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Setup Schema": {
+      "main": [
+        [
+          {
+            "node": "Upsert Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Document": {
+      "main": [
+        [
+          {
+            "node": "Query Documents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Documents": {
+      "main": [
+        [
+          {
+            "node": "Get Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Document": {
+      "main": [
+        [
+          {
+            "node": "Delete Document",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

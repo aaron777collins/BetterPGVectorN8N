@@ -292,7 +292,29 @@ describe('PgvectorVectorStore E2E Tests', () => {
         collection: testCollections.default,
       };
 
-      const mockContext = createMockExecuteFunctions(params);
+      // Provide input data for batch mode - uses default field names since mappings object is not nested
+      const inputData = [
+        {
+          json: {
+            id: undefined,
+            externalId: 'batch-doc-1',
+            content: 'Batch document 1',
+            metadata: { type: 'batch' },
+            embedding: sampleEmbedding1536,
+          },
+        },
+        {
+          json: {
+            id: undefined,
+            externalId: 'batch-doc-2',
+            content: 'Batch document 2',
+            metadata: { type: 'batch' },
+            embedding: sampleEmbedding1536,
+          },
+        },
+      ];
+
+      const mockContext = createMockExecuteFunctions(params, inputData);
       const result = await node.execute!.call(mockContext as any);
 
       const data = extractJsonFromNodeData(result[0]);
@@ -304,7 +326,7 @@ describe('PgvectorVectorStore E2E Tests', () => {
       const params = {
         ...mockParameters.upsertSingle,
         collection: testCollections.default,
-        // Missing embedding
+        embedding: '[]', // Empty embedding should fail validation
       };
 
       const mockContext = createMockExecuteFunctions(params);
@@ -846,13 +868,35 @@ describe('PgvectorVectorStore E2E Tests', () => {
     });
 
     it('should support batch processing workflow', async () => {
-      // Batch insert
+      // Batch insert with input data
       const batchParams = {
         ...mockParameters.upsertBatch,
         collection: testCollections.default,
       };
 
-      const batchContext = createMockExecuteFunctions(batchParams);
+      // Provide input data for batch mode - uses default field names
+      const inputData = [
+        {
+          json: {
+            id: undefined,
+            externalId: 'workflow-doc-1',
+            content: 'Workflow document 1',
+            metadata: { source: 'workflow' },
+            embedding: sampleEmbedding1536,
+          },
+        },
+        {
+          json: {
+            id: undefined,
+            externalId: 'workflow-doc-2',
+            content: 'Workflow document 2',
+            metadata: { source: 'workflow' },
+            embedding: sampleEmbedding1536_2,
+          },
+        },
+      ];
+
+      const batchContext = createMockExecuteFunctions(batchParams, inputData);
       await node.execute!.call(batchContext as any);
 
       // Batch query
