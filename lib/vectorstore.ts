@@ -135,37 +135,31 @@ export class VectorStoreOperations {
       const insertCols: string[] = [cols.id];
       const updateCols: string[] = [];
       const values: any[] = [params.id];
-      let paramIdx = 2;
 
       if (cols.partition && params.collection) {
         insertCols.push(cols.partition);
         updateCols.push(`${cols.partition} = EXCLUDED.${cols.partition}`);
         values.push(params.collection);
-        paramIdx++;
       }
       if (cols.externalId) {
         insertCols.push(cols.externalId);
         updateCols.push(`${cols.externalId} = EXCLUDED.${cols.externalId}`);
         values.push(params.externalId || null);
-        paramIdx++;
       }
       if (cols.content) {
         insertCols.push(cols.content);
         updateCols.push(`${cols.content} = EXCLUDED.${cols.content}`);
         values.push(params.content || null);
-        paramIdx++;
       }
       if (cols.metadata) {
         insertCols.push(cols.metadata);
         updateCols.push(`${cols.metadata} = EXCLUDED.${cols.metadata}`);
         values.push(JSON.stringify(metadata));
-        paramIdx++;
       }
 
       insertCols.push(cols.embedding);
       updateCols.push(`${cols.embedding} = EXCLUDED.${cols.embedding}`);
       values.push(embeddingJson);
-      paramIdx++;
 
       if (cols.updatedAt) {
         updateCols.push(`${cols.updatedAt} = NOW()`);
@@ -189,11 +183,9 @@ export class VectorStoreOperations {
       // Upsert by partition + external_id
       const insertCols: string[] = [cols.partition];
       const values: any[] = [params.collection || 'default'];
-      let paramIdx = 2;
 
       insertCols.push(cols.externalId);
       values.push(params.externalId);
-      paramIdx++;
 
       const updateCols: string[] = [];
 
@@ -201,19 +193,16 @@ export class VectorStoreOperations {
         insertCols.push(cols.content);
         updateCols.push(`${cols.content} = EXCLUDED.${cols.content}`);
         values.push(params.content || null);
-        paramIdx++;
       }
       if (cols.metadata) {
         insertCols.push(cols.metadata);
         updateCols.push(`${cols.metadata} = EXCLUDED.${cols.metadata}`);
         values.push(JSON.stringify(metadata));
-        paramIdx++;
       }
 
       insertCols.push(cols.embedding);
       updateCols.push(`${cols.embedding} = EXCLUDED.${cols.embedding}`);
       values.push(embeddingJson);
-      paramIdx++;
 
       if (cols.updatedAt) {
         updateCols.push(`${cols.updatedAt} = NOW()`);
